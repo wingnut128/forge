@@ -1,0 +1,39 @@
+# Go build artifacts
+/forge
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# Environment and credentials
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+*.tfvars
+
+# SSH/security
+.ssh/
+
+# Pulumi
+Pulumi.*.yaml
+!Pulumi.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

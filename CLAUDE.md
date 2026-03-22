@@ -35,7 +35,7 @@ go test ./pkg/... -run TestName
 
 ## Prerequisites
 
-- Go 1.22+
+- Go 1.25+
 - Pulumi CLI installed
 - GCP credentials via `gcloud auth application-default login`
 - Pulumi stack initialized (`pulumi stack init dev`)
@@ -56,23 +56,13 @@ Set via `pulumi config set forge:<key> <value>`:
 
 The entrypoint (`main.go`) uses Pulumi's **Automation API** (`auto.UpsertStackInlineSource`) to run an inline Pulumi program — no separate `Pulumi.yaml` needed. The CLI accepts `preview`, `up`, or `destroy`.
 
-### Code Layout (current state)
+### Code Layout
 
-All Go files are currently at the repo root, but `main.go` imports assume the intended package structure:
-
-- `main.go` — Automation API entrypoint, wires the deploy pipeline
-- `config.go` (package `config`) — loads `ForgeConfig` from Pulumi stack config
-- `network.go` (package `gcp`) — VPC component: custom-mode VPC, subnet with GKE secondary ranges, internal firewall
-- `gke.go` (package `gcp`) — GKE component: private cluster, Workload Identity, Calico network policy, binary authorization, shielded nodes
-- `workload_identity.go` (package `gcp`) — WIF component: OIDC provider accepting AWS SPIRE SVIDs, attribute mapping for SPIFFE IDs
-- `trust.go` (package `attestation`) — SPIFFE trust domain and federation pair structs (WIP, stubs only)
-
-**Intended layout** (from README, not yet implemented):
 ```
-cmd/forge/          → entrypoint
-pkg/components/gcp/ → network.go, gke.go, workload_identity.go
-pkg/attestation/    → trust.go
-pkg/config/         → config.go
+cmd/forge/              → main.go: Automation API entrypoint, wires the deploy pipeline
+pkg/config/             → config.go: loads ForgeConfig from Pulumi stack config
+pkg/components/gcp/     → network.go, gke.go, workload_identity.go (Pulumi component resources)
+pkg/attestation/        → trust.go: SPIFFE trust domain and federation pair structs (WIP)
 ```
 
 ### Component Resource Pattern

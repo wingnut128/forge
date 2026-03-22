@@ -38,7 +38,7 @@ forge/
 
 ## Prerequisites
 
-- Go 1.22+
+- Go 1.25+
 - Pulumi CLI
 - GCP credentials (`gcloud auth application-default login`)
 - GCP project with required APIs enabled

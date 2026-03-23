@@ -2,6 +2,8 @@
 // using SPIFFE trust bundle exchange and SVID validation.
 package attestation
 
+import "fmt"
+
 // TrustDomain represents a SPIFFE trust domain with its federation configuration.
 type TrustDomain struct {
 	// Name is the SPIFFE trust domain name (e.g., "forge.dev.aws.example.com")
@@ -28,9 +30,7 @@ type FederationPair struct {
 // are in different clouds (cross-cloud attestation doesn't make sense within a single cloud).
 func NewFederationPair(local, remote TrustDomain) (*FederationPair, error) {
 	if local.Cloud == remote.Cloud {
-		// Not strictly an error — same-cloud federation is valid in SPIFFE —
-		// but outside forge's scope. Log a warning in production.
-		_ = 0 // placeholder
+		return nil, fmt.Errorf("forge requires cross-cloud federation: both domains are in %q", local.Cloud)
 	}
 
 	return &FederationPair{

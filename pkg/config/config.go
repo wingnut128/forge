@@ -14,25 +14,37 @@ type ForgeConfig struct {
 	AWSSPIRETrustDomain string
 }
 
+// DefaultGKENodeCount is used when gke-node-count is not set or zero.
+const DefaultGKENodeCount = 3
+
+// DefaultGKEMachineType is used when gke-machine-type is not set.
+const DefaultGKEMachineType = "e2-standard-4"
+
 // Load reads configuration from the active Pulumi stack.
 func Load(ctx *pulumi.Context) *ForgeConfig {
 	cfg := config.New(ctx, "forge")
+	return NewForgeConfig(
+		cfg.Require("environment"),
+		cfg.Require("spire-trust-domain"),
+		cfg.Require("aws-spire-trust-domain"),
+		cfg.GetInt("gke-node-count"),
+		cfg.Get("gke-machine-type"),
+	)
+}
 
-	nodeCount := cfg.GetInt("gke-node-count")
-	if nodeCount == 0 {
-		nodeCount = 3
+// NewForgeConfig creates a ForgeConfig with defaults applied for optional fields.
+func NewForgeConfig(environment, spireTrustDomain, awsSPIRETrustDomain string, gkeNodeCount int, gkeMachineType string) *ForgeConfig {
+	if gkeNodeCount <= 0 {
+		gkeNodeCount = DefaultGKENodeCount
 	}
-
-	machineType := cfg.Get("gke-machine-type")
-	if machineType == "" {
-		machineType = "e2-standard-4"
+	if gkeMachineType == "" {
+		gkeMachineType = DefaultGKEMachineType
 	}
-
 	return &ForgeConfig{
-		Environment:         cfg.Require("environment"),
-		GKENodeCount:        nodeCount,
-		GKEMachineType:      machineType,
-		SPIRETrustDomain:    cfg.Require("spire-trust-domain"),
-		AWSSPIRETrustDomain: cfg.Require("aws-spire-trust-domain"),
+		Environment:         environment,
+		GKENodeCount:        gkeNodeCount,
+		GKEMachineType:      gkeMachineType,
+		SPIRETrustDomain:    spireTrustDomain,
+		AWSSPIRETrustDomain: awsSPIRETrustDomain,
 	}
 }

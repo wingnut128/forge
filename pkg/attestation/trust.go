@@ -39,8 +39,3 @@ func NewFederationPair(local, remote TrustDomain) (*FederationPair, error) {
 	}, nil
 }
 
-// TODO: Implement trust bundle refresh loop using SPIFFE Bundle Endpoint API (RFC 9409).
-// The bundle endpoint provides automatic, authenticated trust bundle distribution
-// between SPIRE servers without requiring manual JWKS synchronization.
-//
-// See: https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md

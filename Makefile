@@ -29,4 +29,4 @@ destroy:
 	FORGE_STACK=$(STACK) go run ./cmd/forge destroy
 
 hooks:
-	pre-commit install
+	./scripts/install-hooks.sh

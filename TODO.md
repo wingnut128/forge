@@ -13,6 +13,6 @@
 ## Low Priority (features & infra)
 - [ ] Implement AWS components (`pkg/components/aws/`)
 - [ ] Add Temporal worker integration
-- [ ] Add policy-as-code via Pulumi CrossGuard
+- [x] Add policy-as-code via Pulumi CrossGuard
 - [ ] Add agent orchestration layer
 - [ ] Create example stack config (`Pulumi.dev.yaml.example`)

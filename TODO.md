@@ -7,8 +7,8 @@
 
 ## Medium Priority (tests & reliability)
 - [x] Add tests for `pkg/config` (defaults, validation, edge cases)
-- [ ] Add tests for `pkg/components/gcp` (Pulumi component tests)
-- [ ] Add input validation in `pkg/config` (trust domain format, environment allowlist)
+- [x] Add tests for `pkg/components/gcp` (Pulumi component tests)
+- [x] Add input validation in `pkg/config` (trust domain format, environment allowlist)
 
 ## Low Priority (features & infra)
 - [ ] Implement AWS components (`pkg/components/aws/`)

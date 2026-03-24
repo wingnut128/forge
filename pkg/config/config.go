@@ -1,9 +1,18 @@
 package config
 
 import (
+	"fmt"
+	"regexp"
+
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
+
+// validEnvironment matches lowercase alphanumeric names with optional hyphens (no leading/trailing).
+var validEnvironment = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$`)
+
+// validTrustDomain matches DNS-like names per the SPIFFE spec (lowercase labels separated by dots).
+var validTrustDomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)*$`)
 
 // ForgeConfig holds all stack configuration values.
 type ForgeConfig struct {
@@ -21,7 +30,7 @@ const DefaultGKENodeCount = 3
 const DefaultGKEMachineType = "e2-standard-4"
 
 // Load reads configuration from the active Pulumi stack.
-func Load(ctx *pulumi.Context) *ForgeConfig {
+func Load(ctx *pulumi.Context) (*ForgeConfig, error) {
 	cfg := config.New(ctx, "forge")
 	return NewForgeConfig(
 		cfg.Require("environment"),
@@ -32,8 +41,20 @@ func Load(ctx *pulumi.Context) *ForgeConfig {
 	)
 }
 
-// NewForgeConfig creates a ForgeConfig with defaults applied for optional fields.
-func NewForgeConfig(environment, spireTrustDomain, awsSPIRETrustDomain string, gkeNodeCount int, gkeMachineType string) *ForgeConfig {
+// NewForgeConfig creates a ForgeConfig with validated inputs and defaults for optional fields.
+func NewForgeConfig(environment, spireTrustDomain, awsSPIRETrustDomain string, gkeNodeCount int, gkeMachineType string) (*ForgeConfig, error) {
+	if environment == "" {
+		return nil, fmt.Errorf("environment must not be empty")
+	}
+	if !validEnvironment.MatchString(environment) {
+		return nil, fmt.Errorf("environment %q must be lowercase alphanumeric with optional hyphens", environment)
+	}
+	if err := validateTrustDomain("spire-trust-domain", spireTrustDomain); err != nil {
+		return nil, err
+	}
+	if err := validateTrustDomain("aws-spire-trust-domain", awsSPIRETrustDomain); err != nil {
+		return nil, err
+	}
 	if gkeNodeCount <= 0 {
 		gkeNodeCount = DefaultGKENodeCount
 	}
@@ -46,5 +67,15 @@ func NewForgeConfig(environment, spireTrustDomain, awsSPIRETrustDomain string, g
 		GKEMachineType:      gkeMachineType,
 		SPIRETrustDomain:    spireTrustDomain,
 		AWSSPIRETrustDomain: awsSPIRETrustDomain,
+	}, nil
+}
+
+func validateTrustDomain(field, value string) error {
+	if value == "" {
+		return fmt.Errorf("%s must not be empty", field)
 	}
+	if !validTrustDomain.MatchString(value) {
+		return fmt.Errorf("%s %q must be a valid DNS-like name (lowercase, dots, hyphens)", field, value)
+	}
+	return nil
 }

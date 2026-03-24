@@ -59,7 +59,10 @@ func main() {
 
 // deployFunc is the inline Pulumi program invoked by the Automation API.
 func deployFunc(ctx *pulumi.Context) error {
-	cfg := forgeconfig.Load(ctx)
+	cfg, err := forgeconfig.Load(ctx)
+	if err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
 
 	// GCP network foundation
 	network, err := gcp.NewNetwork(ctx, "forge-network", &gcp.NetworkArgs{

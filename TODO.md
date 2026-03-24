@@ -10,8 +10,14 @@
 - [x] Add tests for `pkg/components/gcp` (Pulumi component tests)
 - [x] Add input validation in `pkg/config` (trust domain format, environment allowlist)
 
+## Medium Priority (authorization)
+- [ ] Pluggable Cedar policy storage — support loading policies from S3, GCS, PostgreSQL, stdin (e.g., piped from Consul KV), not just local directory
+
+## Medium Priority (infrastructure)
+- [ ] Cloud landing zones — optional provisioning of GCP project/org and AWS account/VPC foundation (conditional flag, not always needed)
+
 ## Low Priority (features & infra)
-- [ ] Implement AWS components (`pkg/components/aws/`)
+- [x] Implement AWS components (`pkg/components/aws/`)
 - [ ] Add Temporal worker integration
 - [x] Add policy-as-code via Pulumi CrossGuard
 - [x] Add agent orchestration layer

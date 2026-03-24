@@ -5,7 +5,7 @@ import "testing"
 // validConfig is a helper that calls NewForgeConfig and fails the test on error.
 func validConfig(t *testing.T, environment, spireTD, awsTD string, nodeCount int, machineType string) *ForgeConfig {
 	t.Helper()
-	cfg, err := NewForgeConfig(environment, spireTD, awsTD, nodeCount, machineType)
+	cfg, err := NewForgeConfig(environment, spireTD, awsTD, nodeCount, machineType, 0, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -79,21 +79,21 @@ func TestNewForgeConfig_PassthroughFields(t *testing.T) {
 // Validation tests
 
 func TestNewForgeConfig_EmptyEnvironment(t *testing.T) {
-	_, err := NewForgeConfig("", "td.example.com", "aws.example.com", 3, "")
+	_, err := NewForgeConfig("", "td.example.com", "aws.example.com", 3, "", 0, "")
 	if err == nil {
 		t.Fatal("expected error for empty environment")
 	}
 }
 
 func TestNewForgeConfig_EnvironmentSpecialChars(t *testing.T) {
-	_, err := NewForgeConfig("prod!@#", "td.example.com", "aws.example.com", 3, "")
+	_, err := NewForgeConfig("prod!@#", "td.example.com", "aws.example.com", 3, "", 0, "")
 	if err == nil {
 		t.Fatal("expected error for environment with special chars")
 	}
 }
 
 func TestNewForgeConfig_EnvironmentUppercase(t *testing.T) {
-	_, err := NewForgeConfig("Prod", "td.example.com", "aws.example.com", 3, "")
+	_, err := NewForgeConfig("Prod", "td.example.com", "aws.example.com", 3, "", 0, "")
 	if err == nil {
 		t.Fatal("expected error for uppercase environment")
 	}
@@ -114,28 +114,28 @@ func TestNewForgeConfig_SingleCharEnvironment(t *testing.T) {
 }
 
 func TestNewForgeConfig_EmptyTrustDomain(t *testing.T) {
-	_, err := NewForgeConfig("dev", "", "aws.example.com", 3, "")
+	_, err := NewForgeConfig("dev", "", "aws.example.com", 3, "", 0, "")
 	if err == nil {
 		t.Fatal("expected error for empty spire-trust-domain")
 	}
 }
 
 func TestNewForgeConfig_EmptyAWSTrustDomain(t *testing.T) {
-	_, err := NewForgeConfig("dev", "td.example.com", "", 3, "")
+	_, err := NewForgeConfig("dev", "td.example.com", "", 3, "", 0, "")
 	if err == nil {
 		t.Fatal("expected error for empty aws-spire-trust-domain")
 	}
 }
 
 func TestNewForgeConfig_InvalidTrustDomain(t *testing.T) {
-	_, err := NewForgeConfig("dev", "not a domain!", "aws.example.com", 3, "")
+	_, err := NewForgeConfig("dev", "not a domain!", "aws.example.com", 3, "", 0, "")
 	if err == nil {
 		t.Fatal("expected error for invalid trust domain")
 	}
 }
 
 func TestNewForgeConfig_TrustDomainWithUppercase(t *testing.T) {
-	_, err := NewForgeConfig("dev", "Forge.Example.Com", "aws.example.com", 3, "")
+	_, err := NewForgeConfig("dev", "Forge.Example.Com", "aws.example.com", 3, "", 0, "")
 	if err == nil {
 		t.Fatal("expected error for uppercase trust domain")
 	}
@@ -148,5 +148,44 @@ func TestNewForgeConfig_ValidTrustDomains(t *testing.T) {
 	}
 	if cfg.AWSSPIRETrustDomain != "forge.dev.aws.example.com" {
 		t.Errorf("AWSSPIRETrustDomain = %q, want %q", cfg.AWSSPIRETrustDomain, "forge.dev.aws.example.com")
+	}
+}
+
+// EKS config tests
+
+func TestNewForgeConfig_DefaultEKSNodeCount(t *testing.T) {
+	cfg := validConfig(t, "dev", "td.example.com", "aws.example.com", 3, "")
+	if cfg.EKSNodeCount != DefaultEKSNodeCount {
+		t.Errorf("EKSNodeCount = %d, want default %d", cfg.EKSNodeCount, DefaultEKSNodeCount)
+	}
+}
+
+func TestNewForgeConfig_DefaultEKSInstanceType(t *testing.T) {
+	cfg := validConfig(t, "dev", "td.example.com", "aws.example.com", 3, "")
+	if cfg.EKSInstanceType != DefaultEKSInstanceType {
+		t.Errorf("EKSInstanceType = %q, want default %q", cfg.EKSInstanceType, DefaultEKSInstanceType)
+	}
+}
+
+func TestNewForgeConfig_EKSFieldsSet(t *testing.T) {
+	cfg, err := NewForgeConfig("dev", "td.example.com", "aws.example.com", 3, "", 5, "m5.xlarge")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EKSNodeCount != 5 {
+		t.Errorf("EKSNodeCount = %d, want %d", cfg.EKSNodeCount, 5)
+	}
+	if cfg.EKSInstanceType != "m5.xlarge" {
+		t.Errorf("EKSInstanceType = %q, want %q", cfg.EKSInstanceType, "m5.xlarge")
+	}
+}
+
+func TestNewForgeConfig_NegativeEKSNodeCount(t *testing.T) {
+	cfg, err := NewForgeConfig("dev", "td.example.com", "aws.example.com", 3, "", -1, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EKSNodeCount != DefaultEKSNodeCount {
+		t.Errorf("EKSNodeCount = %d, want default %d", cfg.EKSNodeCount, DefaultEKSNodeCount)
 	}
 }

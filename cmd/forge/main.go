@@ -15,6 +15,7 @@ import (
 
 	"github.com/wingnut128/forge/pkg/attestation"
 	"github.com/wingnut128/forge/pkg/authz"
+	awscomp "github.com/wingnut128/forge/pkg/components/aws"
 	"github.com/wingnut128/forge/pkg/components/gcp"
 	forgeconfig "github.com/wingnut128/forge/pkg/config"
 	"github.com/wingnut128/forge/pkg/orchestration"
@@ -109,6 +110,30 @@ func deployFunc(ctx *pulumi.Context) error {
 		HasAudiences:       cfg.SPIRETrustDomain != "",
 	}, result)
 
+	// AWS policy checks
+	policies.CheckAWSVPC(policies.AWSVPCPolicyInput{
+		Environment:    cfg.Environment,
+		ResourceName:   fmt.Sprintf("forge-%s-vpc", cfg.Environment),
+		CustomVPC:      true, // hardcoded in NewVPC
+		MultiAZ:        true, // hardcoded in NewVPC (2 subnets)
+		PrivateSubnets: true, // hardcoded in NewVPC
+	}, result)
+
+	policies.CheckEKS(policies.EKSPolicyInput{
+		Environment:      cfg.Environment,
+		ResourceName:     fmt.Sprintf("forge-%s-eks", cfg.Environment),
+		PrivateEndpoint:  true, // hardcoded in NewEKSCluster
+		EncryptedSecrets: true, // hardcoded in NewEKSCluster
+		LoggingEnabled:   true, // hardcoded in NewEKSCluster
+	}, result)
+
+	policies.CheckSPIREOIDC(policies.SPIREOIDCPolicyInput{
+		Environment:    cfg.Environment,
+		ResourceName:   fmt.Sprintf("forge-%s-spire-oidc-gcp", cfg.Environment),
+		OIDCIssuerSet:  true,
+		TrustDomainSet: cfg.AWSSPIRETrustDomain != "",
+	}, result)
+
 	for _, v := range result.Violations {
 		if v.Severity == policies.Advisory {
 			fmt.Fprintf(os.Stderr, "POLICY WARNING [%s]: %s\n", v.Policy, v.Message)
@@ -154,6 +179,39 @@ func deployFunc(ctx *pulumi.Context) error {
 	})
 	if err != nil {
 		return fmt.Errorf("workload identity: %w", err)
+	}
+
+	// --- AWS infrastructure ---
+
+	// AWS VPC
+	awsVPC, err := awscomp.NewVPC(ctx, "forge-aws-vpc", &awscomp.VPCArgs{
+		Environment: cfg.Environment,
+	})
+	if err != nil {
+		return fmt.Errorf("aws vpc: %w", err)
+	}
+
+	// EKS cluster for AWS-side SPIRE server
+	eksCluster, err := awscomp.NewEKSCluster(ctx, "forge-aws-eks", &awscomp.EKSClusterArgs{
+		Environment:  cfg.Environment,
+		VpcID:        awsVPC.ID,
+		SubnetIDs:    awsVPC.SubnetIDs,
+		NodeCount:    cfg.EKSNodeCount,
+		InstanceType: cfg.EKSInstanceType,
+	})
+	if err != nil {
+		return fmt.Errorf("aws eks: %w", err)
+	}
+
+	// AWS SPIRE OIDC provider for cross-cloud attestation from GCP
+	_, err = awscomp.NewSPIREOIDCProvider(ctx, "forge-aws-spire-oidc", &awscomp.SPIREOIDCProviderArgs{
+		Environment:         cfg.Environment,
+		SPIRETrustDomain:    cfg.AWSSPIRETrustDomain,
+		GCPSPIRETrustDomain: cfg.SPIRETrustDomain,
+		EKSClusterName:      eksCluster.Name,
+	})
+	if err != nil {
+		return fmt.Errorf("aws spire oidc: %w", err)
 	}
 
 	return nil

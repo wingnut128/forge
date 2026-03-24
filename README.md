@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/wingnut128/forge/actions/workflows/ci.yml/badge.svg)](https://github.com/wingnut128/forge/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/wingnut128/forge/actions/workflows/codeql.yml/badge.svg)](https://github.com/wingnut128/forge/actions/workflows/codeql.yml)
-[![Semgrep](https://img.shields.io/badge/semgrep-scanning-blue)](https://semgrep.dev/orgs/mlapane_github_personal_org/projects/5345292)
+[![Semgrep](https://github.com/wingnut128/forge/actions/workflows/semgrep.yml/badge.svg)](https://github.com/wingnut128/forge/actions/workflows/semgrep.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/wingnut128/forge)](https://goreportcard.com/report/github.com/wingnut128/forge)
 [![codecov](https://codecov.io/gh/wingnut128/forge/branch/main/graph/badge.svg)](https://codecov.io/gh/wingnut128/forge)
 

@@ -4,7 +4,7 @@
 [![CodeQL](https://github.com/wingnut128/forge/actions/workflows/codeql.yml/badge.svg)](https://github.com/wingnut128/forge/actions/workflows/codeql.yml)
 [![Semgrep](https://img.shields.io/badge/semgrep-scanning-blue)](https://semgrep.dev/orgs/mlapane_github_personal_org/projects/5345292)
 [![Go Report Card](https://goreportcard.com/badge/github.com/wingnut128/forge)](https://goreportcard.com/report/github.com/wingnut128/forge)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/wingnut128/forge/badge)](https://scorecard.dev/viewer/?uri=github.com/wingnut128/forge)
+[![codecov](https://codecov.io/gh/wingnut128/forge/branch/main/graph/badge.svg)](https://codecov.io/gh/wingnut128/forge)
 
 Cross-cloud workload attestation platform built with Pulumi (Go) and SPIFFE/SPIRE.
 

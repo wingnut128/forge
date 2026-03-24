@@ -70,9 +70,9 @@ func NewWorkloadIdentity(ctx *pulumi.Context, name string, args *WorkloadIdentit
 		// Attribute mapping — map SPIFFE ID claims to Google attributes
 		// for fine-grained IAM binding
 		AttributeMapping: pulumi.StringMap{
-			"google.subject":        pulumi.String("assertion.sub"),                // SPIFFE ID
+			"google.subject":         pulumi.String("assertion.sub"), // SPIFFE ID
 			"attribute.trust_domain": pulumi.String("assertion.sub.extract('spiffe://{trust_domain}/')"),
-			"attribute.workload":    pulumi.String("assertion.sub.extract('/{workload_id}')"),
+			"attribute.workload":     pulumi.String("assertion.sub.extract('/{workload_id}')"),
 		},
 
 		// Attribute condition — only accept SVIDs from the expected trust domain

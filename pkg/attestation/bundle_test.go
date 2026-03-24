@@ -74,7 +74,7 @@ func serveBundleEndpoint(t *testing.T) *httptest.Server {
 	t.Helper()
 	// Minimal valid SPIFFE bundle: empty JWKS with spiffe_refresh_hint.
 	bundle := map[string]any{
-		"keys":               []any{},
+		"keys":                []any{},
 		"spiffe_refresh_hint": 300,
 	}
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

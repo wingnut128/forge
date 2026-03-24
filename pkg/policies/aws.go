@@ -72,4 +72,3 @@ func CheckSPIREOIDC(input SPIREOIDCPolicyInput, r *Result) {
 	}
 	checkNaming(input.ResourceName, input.Environment, r)
 }
-

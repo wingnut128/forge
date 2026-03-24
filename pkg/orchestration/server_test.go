@@ -17,6 +17,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/bundle/jwtbundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/wingnut128/forge/pkg/attestation"
+	"github.com/wingnut128/forge/pkg/authz"
 )
 
 // signTestJWT creates a signed JWT with the given claims using ES256.
@@ -66,7 +67,7 @@ func testPairAndBundle(t *testing.T) (*attestation.FederationPair, *jwtbundle.Bu
 
 func TestHandleValidate_Success(t *testing.T) {
 	pair, bundle, key := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0")
+	srv := NewServer(pair, bundle, ":0", nil)
 
 	token := signTestJWT(t, key, "test-key-1", map[string]any{
 		"sub": "spiffe://remote.example.com/workload/api",
@@ -97,7 +98,7 @@ func TestHandleValidate_Success(t *testing.T) {
 
 func TestHandleValidate_InvalidToken(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0")
+	srv := NewServer(pair, bundle, ":0", nil)
 
 	body, _ := json.Marshal(validateRequest{Token: "garbage"})
 	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
@@ -119,7 +120,7 @@ func TestHandleValidate_InvalidToken(t *testing.T) {
 
 func TestHandleValidate_MissingBody(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0")
+	srv := NewServer(pair, bundle, ":0", nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/validate", nil)
 	w := httptest.NewRecorder()
@@ -132,7 +133,7 @@ func TestHandleValidate_MissingBody(t *testing.T) {
 
 func TestHandleValidate_EmptyToken(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0")
+	srv := NewServer(pair, bundle, ":0", nil)
 
 	body, _ := json.Marshal(validateRequest{Token: ""})
 	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
@@ -146,7 +147,7 @@ func TestHandleValidate_EmptyToken(t *testing.T) {
 
 func TestHandleValidate_WrongMethod(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0")
+	srv := NewServer(pair, bundle, ":0", nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/validate", nil)
 	w := httptest.NewRecorder()
@@ -159,7 +160,7 @@ func TestHandleValidate_WrongMethod(t *testing.T) {
 
 func TestHandleHealthz_BundleLoaded(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0")
+	srv := NewServer(pair, bundle, ":0", nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
@@ -183,7 +184,7 @@ func (e *errorBundleSource) GetJWTBundleForTrustDomain(_ spiffeid.TrustDomain) (
 
 func TestHandleHealthz_NoBundleLoaded(t *testing.T) {
 	pair, _, _ := testPairAndBundle(t)
-	srv := NewServer(pair, &errorBundleSource{}, ":0")
+	srv := NewServer(pair, &errorBundleSource{}, ":0", nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
@@ -196,7 +197,7 @@ func TestHandleHealthz_NoBundleLoaded(t *testing.T) {
 
 func TestServerStartAndShutdown(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, "127.0.0.1:0")
+	srv := NewServer(pair, bundle, "127.0.0.1:0", nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -220,5 +221,120 @@ func TestServerStartAndShutdown(t *testing.T) {
 	cancel()
 	if err := <-errCh; err != nil {
 		t.Fatalf("Start returned error: %v", err)
+	}
+}
+
+// --- Authorization tests ---
+
+// stubAuthorizer implements authz.Authorizer with a fixed decision.
+type stubAuthorizer struct {
+	decision authz.Decision
+}
+
+func (s *stubAuthorizer) IsAuthorized(_, _, _ string) (authz.Decision, error) {
+	return s.decision, nil
+}
+
+func TestHandleValidate_WithAuthz_Permitted(t *testing.T) {
+	pair, bundle, key := testPairAndBundle(t)
+	az := &stubAuthorizer{decision: authz.Decision{Allowed: true, Reason: "test permit"}}
+	srv := NewServer(pair, bundle, ":0", az)
+
+	token := signTestJWT(t, key, "test-key-1", map[string]any{
+		"sub": "spiffe://remote.example.com/workload/api",
+		"aud": []string{"local.example.com"},
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	body, _ := json.Marshal(validateRequest{Token: token, Action: "read-data", Resource: "pipeline-x"})
+	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.handleValidate(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+	var resp validateResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+	if !resp.Valid {
+		t.Error("valid = false, want true")
+	}
+	if resp.Authorized == nil || !*resp.Authorized {
+		t.Error("authorized should be true")
+	}
+}
+
+func TestHandleValidate_WithAuthz_Denied(t *testing.T) {
+	pair, bundle, key := testPairAndBundle(t)
+	az := &stubAuthorizer{decision: authz.Decision{Allowed: false, Reason: "no matching permit policy"}}
+	srv := NewServer(pair, bundle, ":0", az)
+
+	token := signTestJWT(t, key, "test-key-1", map[string]any{
+		"sub": "spiffe://remote.example.com/workload/api",
+		"aud": []string{"local.example.com"},
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	body, _ := json.Marshal(validateRequest{Token: token, Action: "write-data", Resource: "pipeline-x"})
+	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.handleValidate(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	var resp validateResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Authorized == nil || *resp.Authorized {
+		t.Error("authorized should be false")
+	}
+	if resp.DenyReason == "" {
+		t.Error("expected deny_reason")
+	}
+}
+
+func TestHandleValidate_AuthzSkippedWhenNoActionResource(t *testing.T) {
+	pair, bundle, key := testPairAndBundle(t)
+	az := &stubAuthorizer{decision: authz.Decision{Allowed: false, Reason: "should not be called"}}
+	srv := NewServer(pair, bundle, ":0", az)
+
+	token := signTestJWT(t, key, "test-key-1", map[string]any{
+		"sub": "spiffe://remote.example.com/workload/api",
+		"aud": []string{"local.example.com"},
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	// No action/resource — authz should be skipped
+	body, _ := json.Marshal(validateRequest{Token: token})
+	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.handleValidate(w, req)
+
+	var resp validateResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Authorized != nil {
+		t.Error("authorized should be nil when action/resource not provided")
+	}
+}
+
+func TestHandleValidate_AuthzSkippedWhenNoAuthorizer(t *testing.T) {
+	pair, bundle, key := testPairAndBundle(t)
+	srv := NewServer(pair, bundle, ":0", nil) // nil authorizer
+
+	token := signTestJWT(t, key, "test-key-1", map[string]any{
+		"sub": "spiffe://remote.example.com/workload/api",
+		"aud": []string{"local.example.com"},
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	body, _ := json.Marshal(validateRequest{Token: token, Action: "read-data", Resource: "pipeline-x"})
+	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.handleValidate(w, req)
+
+	var resp validateResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Authorized != nil {
+		t.Error("authorized should be nil when no authorizer configured")
 	}
 }

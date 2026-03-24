@@ -11,6 +11,7 @@ import (
 	"github.com/spiffe/go-spiffe/v2/bundle/jwtbundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/wingnut128/forge/pkg/attestation"
+	"github.com/wingnut128/forge/pkg/authz"
 )
 
 // Server is the attestation HTTP service that validates JWT-SVIDs
@@ -19,17 +20,19 @@ type Server struct {
 	pair       *attestation.FederationPair
 	bundles    jwtbundle.Source
 	remoteTD   spiffeid.TrustDomain
+	authorizer authz.Authorizer // nil means authorization disabled
 	httpServer *http.Server
 	listener   net.Listener
 }
 
 // NewServer creates an attestation server that validates tokens against the
 // given federation pair and bundle source.
-func NewServer(pair *attestation.FederationPair, bundles jwtbundle.Source, addr string) *Server {
+func NewServer(pair *attestation.FederationPair, bundles jwtbundle.Source, addr string, authorizer authz.Authorizer) *Server {
 	s := &Server{
-		pair:     pair,
-		bundles:  bundles,
-		remoteTD: spiffeid.RequireTrustDomainFromString(pair.Remote.Name),
+		pair:       pair,
+		bundles:    bundles,
+		remoteTD:   spiffeid.RequireTrustDomainFromString(pair.Remote.Name),
+		authorizer: authorizer,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/validate", s.handleValidate)
@@ -77,7 +80,9 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 type validateRequest struct {
-	Token string `json:"token"`
+	Token    string `json:"token"`
+	Action   string `json:"action,omitempty"`
+	Resource string `json:"resource,omitempty"`
 }
 
 type validateResponse struct {
@@ -85,6 +90,8 @@ type validateResponse struct {
 	SpiffeID    string `json:"spiffe_id,omitempty"`
 	TrustDomain string `json:"trust_domain,omitempty"`
 	Expiry      string `json:"expiry,omitempty"`
+	Authorized  *bool  `json:"authorized,omitempty"`
+	DenyReason  string `json:"deny_reason,omitempty"`
 	Error       string `json:"error,omitempty"`
 }
 
@@ -115,12 +122,26 @@ func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, validateResponse{
+	resp := validateResponse{
 		Valid:       true,
 		SpiffeID:    svid.ID.String(),
 		TrustDomain: svid.ID.TrustDomain().String(),
 		Expiry:      svid.Expiry.Format(time.RFC3339),
-	})
+	}
+
+	if s.authorizer != nil && req.Action != "" && req.Resource != "" {
+		decision, err := s.authorizer.IsAuthorized(svid.ID.String(), req.Action, req.Resource)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, validateResponse{Error: "authorization evaluation failed"})
+			return
+		}
+		resp.Authorized = &decision.Allowed
+		if !decision.Allowed {
+			resp.DenyReason = decision.Reason
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {

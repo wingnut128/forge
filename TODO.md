@@ -14,5 +14,5 @@
 - [ ] Implement AWS components (`pkg/components/aws/`)
 - [ ] Add Temporal worker integration
 - [x] Add policy-as-code via Pulumi CrossGuard
-- [ ] Add agent orchestration layer
+- [x] Add agent orchestration layer
 - [ ] Create example stack config (`Pulumi.dev.yaml.example`)

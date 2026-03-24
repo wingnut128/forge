@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optdestroy"
@@ -11,15 +13,26 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
+	"github.com/wingnut128/forge/pkg/attestation"
 	"github.com/wingnut128/forge/pkg/components/gcp"
 	forgeconfig "github.com/wingnut128/forge/pkg/config"
+	"github.com/wingnut128/forge/pkg/orchestration"
 	"github.com/wingnut128/forge/pkg/policies"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: forge <preview|up|destroy>")
+		fmt.Println("usage: forge <preview|up|destroy|serve>")
 		os.Exit(1)
+	}
+
+	// Handle serve separately — no Pulumi context needed.
+	if os.Args[1] == "serve" {
+		if err := runServe(); err != nil {
+			fmt.Fprintf(os.Stderr, "serve failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	ctx := context.Background()
@@ -143,4 +156,43 @@ func deployFunc(ctx *pulumi.Context) error {
 	}
 
 	return nil
+}
+
+// runServe starts the attestation HTTP server.
+func runServe() error {
+	localTD := os.Getenv("FORGE_LOCAL_TRUST_DOMAIN")
+	remoteTD := os.Getenv("FORGE_REMOTE_TRUST_DOMAIN")
+	bundleURL := os.Getenv("FORGE_BUNDLE_ENDPOINT_URL")
+	listenAddr := os.Getenv("FORGE_LISTEN_ADDR")
+	if listenAddr == "" {
+		listenAddr = ":8080"
+	}
+
+	if localTD == "" || remoteTD == "" || bundleURL == "" {
+		return fmt.Errorf("FORGE_LOCAL_TRUST_DOMAIN, FORGE_REMOTE_TRUST_DOMAIN, and FORGE_BUNDLE_ENDPOINT_URL are required")
+	}
+
+	pair, err := attestation.NewFederationPair(
+		attestation.TrustDomain{Name: localTD, Cloud: "gcp"},
+		attestation.TrustDomain{Name: remoteTD, Cloud: "aws"},
+	)
+	if err != nil {
+		return fmt.Errorf("federation pair: %w", err)
+	}
+
+	refresher, err := attestation.NewBundleRefresher(remoteTD, bundleURL, 0)
+	if err != nil {
+		return fmt.Errorf("bundle refresher: %w", err)
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	if err := refresher.Start(ctx); err != nil {
+		return fmt.Errorf("starting bundle refresher: %w", err)
+	}
+
+	srv := orchestration.NewServer(pair, refresher, listenAddr)
+	fmt.Printf("forge serve listening on %s\n", listenAddr)
+	return srv.Start(ctx)
 }

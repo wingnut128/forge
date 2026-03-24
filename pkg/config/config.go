@@ -16,10 +16,12 @@ var validTrustDomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-
 
 // ForgeConfig holds all stack configuration values.
 type ForgeConfig struct {
-	Environment       string
-	GKENodeCount      int
-	GKEMachineType    string
-	SPIRETrustDomain  string
+	Environment         string
+	GKENodeCount        int
+	GKEMachineType      string
+	EKSNodeCount        int
+	EKSInstanceType     string
+	SPIRETrustDomain    string
 	AWSSPIRETrustDomain string
 }
 
@@ -28,6 +30,12 @@ const DefaultGKENodeCount = 3
 
 // DefaultGKEMachineType is used when gke-machine-type is not set.
 const DefaultGKEMachineType = "e2-standard-4"
+
+// DefaultEKSNodeCount is used when eks-node-count is not set or zero.
+const DefaultEKSNodeCount = 3
+
+// DefaultEKSInstanceType is used when eks-instance-type is not set.
+const DefaultEKSInstanceType = "t3.medium"
 
 // Load reads configuration from the active Pulumi stack.
 func Load(ctx *pulumi.Context) (*ForgeConfig, error) {
@@ -38,11 +46,13 @@ func Load(ctx *pulumi.Context) (*ForgeConfig, error) {
 		cfg.Require("aws-spire-trust-domain"),
 		cfg.GetInt("gke-node-count"),
 		cfg.Get("gke-machine-type"),
+		cfg.GetInt("eks-node-count"),
+		cfg.Get("eks-instance-type"),
 	)
 }
 
 // NewForgeConfig creates a ForgeConfig with validated inputs and defaults for optional fields.
-func NewForgeConfig(environment, spireTrustDomain, awsSPIRETrustDomain string, gkeNodeCount int, gkeMachineType string) (*ForgeConfig, error) {
+func NewForgeConfig(environment, spireTrustDomain, awsSPIRETrustDomain string, gkeNodeCount int, gkeMachineType string, eksNodeCount int, eksInstanceType string) (*ForgeConfig, error) {
 	if environment == "" {
 		return nil, fmt.Errorf("environment must not be empty")
 	}
@@ -61,10 +71,18 @@ func NewForgeConfig(environment, spireTrustDomain, awsSPIRETrustDomain string, g
 	if gkeMachineType == "" {
 		gkeMachineType = DefaultGKEMachineType
 	}
+	if eksNodeCount <= 0 {
+		eksNodeCount = DefaultEKSNodeCount
+	}
+	if eksInstanceType == "" {
+		eksInstanceType = DefaultEKSInstanceType
+	}
 	return &ForgeConfig{
 		Environment:         environment,
 		GKENodeCount:        gkeNodeCount,
 		GKEMachineType:      gkeMachineType,
+		EKSNodeCount:        eksNodeCount,
+		EKSInstanceType:     eksInstanceType,
 		SPIRETrustDomain:    spireTrustDomain,
 		AWSSPIRETrustDomain: awsSPIRETrustDomain,
 	}, nil

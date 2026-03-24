@@ -13,6 +13,7 @@ import (
 
 	"github.com/wingnut128/forge/pkg/components/gcp"
 	forgeconfig "github.com/wingnut128/forge/pkg/config"
+	"github.com/wingnut128/forge/pkg/policies"
 )
 
 func main() {
@@ -64,6 +65,52 @@ func deployFunc(ctx *pulumi.Context) error {
 		return fmt.Errorf("config: %w", err)
 	}
 
+	// --- Policy checks ---
+	result := &policies.Result{}
+
+	policies.CheckNetwork(policies.NetworkPolicyInput{
+		Environment:         cfg.Environment,
+		ResourceName:        fmt.Sprintf("forge-%s-vpc", cfg.Environment),
+		CustomSubnetMode:    true, // hardcoded in NewNetwork
+		PrivateGoogleAccess: true, // hardcoded in NewNetwork
+	}, result)
+
+	policies.CheckGKE(policies.GKEPolicyInput{
+		Environment:       cfg.Environment,
+		ResourceName:      fmt.Sprintf("forge-%s-gke", cfg.Environment),
+		PrivateCluster:    true, // hardcoded in NewGKECluster
+		WorkloadIdentity:  true, // hardcoded in NewGKECluster
+		BinaryAuthEnabled: true, // hardcoded in NewGKECluster
+		NetworkPolicy:     true, // hardcoded in NewGKECluster
+		SecureBoot:        true, // hardcoded in NewGKECluster
+		IntegrityMonitor:  true, // hardcoded in NewGKECluster
+		AutoRepair:        true, // hardcoded in NewGKECluster
+		AutoUpgrade:       true, // hardcoded in NewGKECluster
+	}, result)
+
+	policies.CheckWorkloadIdentity(policies.WorkloadIdentityPolicyInput{
+		Environment:        cfg.Environment,
+		ResourceName:       fmt.Sprintf("forge-%s-spiffe-pool", cfg.Environment),
+		AttributeCondition: fmt.Sprintf("assertion.sub.startsWith('spiffe://%s/')", cfg.AWSSPIRETrustDomain),
+		HasAudiences:       cfg.SPIRETrustDomain != "",
+	}, result)
+
+	for _, v := range result.Violations {
+		if v.Severity == policies.Advisory {
+			fmt.Fprintf(os.Stderr, "POLICY WARNING [%s]: %s\n", v.Policy, v.Message)
+		}
+	}
+	if err := result.Error(); err != nil {
+		for _, v := range result.Violations {
+			if v.Severity == policies.Mandatory {
+				fmt.Fprintf(os.Stderr, "POLICY VIOLATION [%s]: %s\n", v.Policy, v.Message)
+			}
+		}
+		return err
+	}
+
+	// --- Provision infrastructure ---
+
 	// GCP network foundation
 	network, err := gcp.NewNetwork(ctx, "forge-network", &gcp.NetworkArgs{
 		Environment: cfg.Environment,
@@ -86,10 +133,10 @@ func deployFunc(ctx *pulumi.Context) error {
 
 	// Workload Identity Federation for cross-cloud SPIFFE attestation
 	_, err = gcp.NewWorkloadIdentity(ctx, "forge-wif", &gcp.WorkloadIdentityArgs{
-		Environment:       cfg.Environment,
-		SPIRETrustDomain:  cfg.SPIRETrustDomain,
-		AWSSTrustDomain:   cfg.AWSSPIRETrustDomain,
-		GKEClusterName:    cluster.Name,
+		Environment:      cfg.Environment,
+		SPIRETrustDomain: cfg.SPIRETrustDomain,
+		AWSSTrustDomain:  cfg.AWSSPIRETrustDomain,
+		GKEClusterName:   cluster.Name,
 	})
 	if err != nil {
 		return fmt.Errorf("workload identity: %w", err)

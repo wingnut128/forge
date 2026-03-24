@@ -54,7 +54,7 @@ func NewGKECluster(ctx *pulumi.Context, name string, args *GKEClusterArgs, opts 
 		PrivateClusterConfig: &container.ClusterPrivateClusterConfigArgs{
 			EnablePrivateNodes:    pulumi.Bool(true),
 			EnablePrivateEndpoint: pulumi.Bool(false), // allow kubectl from outside
-			MasterIpv4CidrBlock:  pulumi.String("172.16.0.0/28"),
+			MasterIpv4CidrBlock:   pulumi.String("172.16.0.0/28"),
 		},
 
 		// Binary authorization for supply chain security

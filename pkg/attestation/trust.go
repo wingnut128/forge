@@ -38,4 +38,3 @@ func NewFederationPair(local, remote TrustDomain) (*FederationPair, error) {
 		Remote: remote,
 	}, nil
 }
-

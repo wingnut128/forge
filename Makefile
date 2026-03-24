@@ -1,4 +1,4 @@
-.PHONY: build test vet lint clean preview up destroy tidy
+.PHONY: build test vet lint clean preview up destroy tidy hooks
 
 STACK ?= dev
 
@@ -27,3 +27,6 @@ up:
 
 destroy:
 	FORGE_STACK=$(STACK) go run ./cmd/forge destroy
+
+hooks:
+	./scripts/install-hooks.sh

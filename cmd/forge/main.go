@@ -14,6 +14,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
 	"github.com/wingnut128/forge/pkg/attestation"
+	"github.com/wingnut128/forge/pkg/authz"
 	"github.com/wingnut128/forge/pkg/components/gcp"
 	forgeconfig "github.com/wingnut128/forge/pkg/config"
 	"github.com/wingnut128/forge/pkg/orchestration"
@@ -192,7 +193,18 @@ func runServe() error {
 		return fmt.Errorf("starting bundle refresher: %w", err)
 	}
 
-	srv := orchestration.NewServer(pair, refresher, listenAddr)
+	var authorizer authz.Authorizer
+	policyDir := os.Getenv("FORGE_POLICY_DIR")
+	if policyDir != "" {
+		a, err := authz.NewCedarAuthorizer(policyDir)
+		if err != nil {
+			return fmt.Errorf("loading policies from %s: %w", policyDir, err)
+		}
+		authorizer = a
+		fmt.Printf("loaded Cedar policies from %s\n", policyDir)
+	}
+
+	srv := orchestration.NewServer(pair, refresher, listenAddr, authorizer)
 	fmt.Printf("forge serve listening on %s\n", listenAddr)
 	return srv.Start(ctx)
 }

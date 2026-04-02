@@ -1,5 +1,11 @@
 name: CodeQL
 
+permissions:
+  actions: read
+  checks: write
+  security-events: write
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -12,10 +18,6 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      security-events: write
-      contents: read
     strategy:
       matrix:
         language: [go]

@@ -39,7 +39,7 @@ func NewCedarAuthorizer(policyDir string) (*CedarAuthorizer, error) {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".cedar") {
 			continue
 		}
-		path := filepath.Join(policyDir, entry.Name())
+		path := filepath.Clean(filepath.Join(policyDir, entry.Name()))
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", path, err)

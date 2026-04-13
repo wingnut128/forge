@@ -44,14 +44,6 @@ func main() {
 		stackName = "dev"
 	}
 
-	if os.Args[1] == "test" {
-		if err := runTest(ctx, stackName); err != nil {
-			fmt.Fprintf(os.Stderr, "test failed: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
-
 	s, err := auto.UpsertStackInlineSource(ctx, stackName, "forge", deployFunc)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create/select stack: %v\n", err)
@@ -161,6 +153,7 @@ func deployFunc(ctx *pulumi.Context) error {
 	// GCP network foundation
 	network, err := gcp.NewNetwork(ctx, "forge-network", &gcp.NetworkArgs{
 		Environment: cfg.Environment,
+		Region:      cfg.GCPRegion,
 	})
 	if err != nil {
 		return fmt.Errorf("network: %w", err)
@@ -194,6 +187,7 @@ func deployFunc(ctx *pulumi.Context) error {
 	// AWS VPC
 	awsVPC, err := awscomp.NewVPC(ctx, "forge-aws-vpc", &awscomp.VPCArgs{
 		Environment: cfg.Environment,
+		Region:      cfg.AWSRegion,
 	})
 	if err != nil {
 		return fmt.Errorf("aws vpc: %w", err)

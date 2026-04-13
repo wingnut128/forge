@@ -41,7 +41,7 @@ func (m *recordingMock) hasResource(substr string) bool {
 func TestNewVPC_CreatesResources(t *testing.T) {
 	mock := &recordingMock{}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		vpc, err := NewVPC(ctx, "test-vpc", &VPCArgs{Environment: "dev"})
+		vpc, err := NewVPC(ctx, "test-vpc", &VPCArgs{Environment: "dev", Region: "us-east-1"})
 		if err != nil {
 			return err
 		}

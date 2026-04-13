@@ -8,11 +8,13 @@ import (
 )
 
 type CloudRunServiceArgs struct {
-	Environment string
-	Image       pulumi.StringInput
-	Port        int
-	Command     []string
-	Args        []string
+	Environment        string
+	Region             string
+	Image              pulumi.StringInput
+	Port               int
+	Command            []string
+	Args               []string
+	DeletionProtection bool
 }
 
 type CloudRunService struct {
@@ -38,7 +40,8 @@ func NewCloudRunService(ctx *pulumi.Context, name string, args *CloudRunServiceA
 	}
 
 	service, err := cloudrunv2.NewService(ctx, namePrefix+"-service", &cloudrunv2.ServiceArgs{
-		Location: pulumi.String("us-central1"),
+		Location:           pulumi.String(args.Region),
+		DeletionProtection: pulumi.Bool(args.DeletionProtection),
 		Template: &cloudrunv2.ServiceTemplateArgs{
 			Containers: cloudrunv2.ServiceTemplateContainerArray{
 				containerArgs(args, port),
@@ -55,7 +58,7 @@ func NewCloudRunService(ctx *pulumi.Context, name string, args *CloudRunServiceA
 
 	_, err = cloudrunv2.NewServiceIamMember(ctx, namePrefix+"-public", &cloudrunv2.ServiceIamMemberArgs{
 		Name:     service.Name,
-		Location: pulumi.String("us-central1"),
+		Location: pulumi.String(args.Region),
 		Role:     pulumi.String("roles/run.invoker"),
 		Member:   pulumi.String("allUsers"),
 	}, parentOpt)

@@ -9,6 +9,7 @@ import (
 
 type ArtifactRegistryArgs struct {
 	Environment string
+	Region      string
 }
 
 type ArtifactRegistry struct {
@@ -30,7 +31,7 @@ func NewArtifactRegistry(ctx *pulumi.Context, name string, args *ArtifactRegistr
 
 	repo, err := artifactregistry.NewRepository(ctx, namePrefix+"-repo", &artifactregistry.RepositoryArgs{
 		Format:       pulumi.String("DOCKER"),
-		Location:     pulumi.String("us-central1"),
+		Location:     pulumi.String(args.Region),
 		RepositoryId: pulumi.String(namePrefix),
 		Description:  pulumi.Sprintf("Forge %s container images", args.Environment),
 	}, parentOpt)

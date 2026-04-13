@@ -43,7 +43,7 @@ func (m *recordingMock) hasResource(substr string) bool {
 func TestNewNetwork_CreatesResources(t *testing.T) {
 	mock := &recordingMock{}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		net, err := NewNetwork(ctx, "test-network", &NetworkArgs{Environment: "dev"})
+		net, err := NewNetwork(ctx, "test-network", &NetworkArgs{Environment: "dev", Region: "us-central1"})
 		if err != nil {
 			return err
 		}

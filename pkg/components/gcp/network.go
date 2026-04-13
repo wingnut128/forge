@@ -10,6 +10,7 @@ import (
 // NetworkArgs configures the VPC network component.
 type NetworkArgs struct {
 	Environment string
+	Region      string
 }
 
 // Network is a Pulumi component resource that provisions a VPC with
@@ -45,7 +46,7 @@ func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pul
 	subnet, err := compute.NewSubnetwork(ctx, namePrefix+"-subnet", &compute.SubnetworkArgs{
 		Network:     vpc.ID(),
 		IpCidrRange: pulumi.String("10.0.0.0/20"),
-		Region:      pulumi.String("us-central1"),
+		Region:      pulumi.String(args.Region),
 		SecondaryIpRanges: compute.SubnetworkSecondaryIpRangeArray{
 			&compute.SubnetworkSecondaryIpRangeArgs{
 				RangeName:   pulumi.String("pods"),

@@ -10,6 +10,7 @@ import (
 // VPCArgs configures the AWS VPC component.
 type VPCArgs struct {
 	Environment string
+	Region      string
 }
 
 // VPC is a Pulumi component resource that provisions an AWS VPC with
@@ -49,7 +50,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 	subnetA, err := ec2.NewSubnet(ctx, namePrefix+"-subnet-a", &ec2.SubnetArgs{
 		VpcId:               vpc.ID(),
 		CidrBlock:           pulumi.String("10.1.0.0/20"),
-		AvailabilityZone:    pulumi.String("us-east-1a"),
+		AvailabilityZone:    pulumi.String(args.Region + "a"),
 		MapPublicIpOnLaunch: pulumi.Bool(false),
 		Tags: pulumi.StringMap{
 			"Name": pulumi.String(namePrefix + "-subnet-a"),
@@ -62,7 +63,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 	subnetB, err := ec2.NewSubnet(ctx, namePrefix+"-subnet-b", &ec2.SubnetArgs{
 		VpcId:               vpc.ID(),
 		CidrBlock:           pulumi.String("10.1.16.0/20"),
-		AvailabilityZone:    pulumi.String("us-east-1b"),
+		AvailabilityZone:    pulumi.String(args.Region + "b"),
 		MapPublicIpOnLaunch: pulumi.Bool(false),
 		Tags: pulumi.StringMap{
 			"Name": pulumi.String(namePrefix + "-subnet-b"),

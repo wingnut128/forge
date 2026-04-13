@@ -63,6 +63,8 @@ Set via `pulumi config set forge:<key> <value>`:
 | `environment` | yes | — |
 | `spire-trust-domain` | yes | — |
 | `aws-spire-trust-domain` | yes | — |
+| `gcp-region` | no | us-central1 |
+| `aws-region` | no | us-east-1 |
 | `gke-node-count` | no | 3 |
 | `gke-machine-type` | no | e2-standard-4 |
 | `eks-node-count` | no | 3 |
@@ -123,7 +125,7 @@ Cedar-based ABAC. SPIFFE IDs map to `SpiffeWorkload` Cedar principals. The `/val
 
 - **Private clusters**: GKE nodes have no public IPs; EKS uses private endpoint. Control planes accessible externally.
 - **Workload Identity Federation** (GCP) accepts OIDC JWTs from AWS SPIRE; **IAM OIDC Provider** (AWS) accepts JWTs from GCP SPIRE. Bidirectional federation.
-- **Regions**: GCP hardcoded to `us-central1`, AWS to `us-east-1`
+- **Regions**: Configurable via `gcp-region` / `aws-region` stack config (defaults: `us-central1`, `us-east-1`)
 - **CIDRs**: GCP `10.0.0.0/20`, AWS `10.1.0.0/16` (non-overlapping)
 - **Policy checks run before provisioning** — mandatory violations block deployment
 - **Authorization is opt-in** at both server level (no `FORGE_POLICY_DIR` = disabled) and request level (omit action/resource fields)

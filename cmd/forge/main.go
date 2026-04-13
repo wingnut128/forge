@@ -44,6 +44,14 @@ func main() {
 		stackName = "dev"
 	}
 
+	if os.Args[1] == "test" {
+		if err := runTest(ctx, stackName); err != nil {
+			fmt.Fprintf(os.Stderr, "test failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	s, err := auto.UpsertStackInlineSource(ctx, stackName, "forge", deployFunc)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create/select stack: %v\n", err)

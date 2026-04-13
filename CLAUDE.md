@@ -85,9 +85,9 @@ The entrypoint (`main.go`) uses Pulumi's **Automation API** (`auto.UpsertStackIn
 ### Code Layout
 
 ```
-cmd/forge/              → main.go: Automation API entrypoint + serve command
+cmd/forge/              → main.go: Automation API entrypoint + serve command; test.go: test stack (AR, Cloud Run, Cloud Build)
 pkg/config/             → config.go: loads and validates ForgeConfig from Pulumi stack config
-pkg/components/gcp/     → network.go, gke.go, workload_identity.go (GCP Pulumi components)
+pkg/components/gcp/     → network.go, gke.go, workload_identity.go, cloudbuild.go, cloudrun.go, artifact_registry.go (GCP Pulumi components)
 pkg/components/aws/     → vpc.go, eks.go, spire_oidc.go (AWS Pulumi components)
 pkg/attestation/        → trust.go, bundle.go, validate.go (SPIFFE federation + JWT-SVID validation)
 pkg/orchestration/      → server.go: HTTP server for /validate and /healthz endpoints
@@ -106,7 +106,7 @@ All infrastructure components (GCP and AWS) follow Pulumi's component resource p
 
 Resource naming convention: `forge-{environment}-{resource}` (e.g., `forge-dev-vpc`).
 
-GCP URNs: `forge:gcp:Network`, `forge:gcp:GKECluster`, `forge:gcp:WorkloadIdentity`.
+GCP URNs: `forge:gcp:Network`, `forge:gcp:GKECluster`, `forge:gcp:WorkloadIdentity`, `forge:gcp:ArtifactRegistry`, `forge:gcp:CloudRunService`, `forge:gcp:CloudBuildTrigger`.
 AWS URNs: `forge:aws:VPC`, `forge:aws:EKSCluster`, `forge:aws:SPIREOIDCProvider`.
 
 ### Deploy Pipeline Flow

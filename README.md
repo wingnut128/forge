@@ -21,7 +21,7 @@ forge/
 ├── cmd/forge/              # Automation API entrypoint
 ├── pkg/
 │   ├── components/         # Reusable Pulumi component resources
-│   │   ├── gcp/            # GCP infrastructure (VPC, GKE, Workload Identity)
+│   │   ├── gcp/            # GCP infrastructure (VPC, GKE, WIF, AR, Cloud Run, Cloud Build)
 │   │   └── aws/            # AWS infrastructure (VPC, EKS, SPIRE OIDC)
 │   ├── attestation/        # Cross-cloud trust bundle & SPIFFE federation
 │   └── config/             # Stack configuration helpers
@@ -30,7 +30,7 @@ forge/
 
 ## Current Scope
 
-- **GCP foundation**: VPC, GKE, Workload Identity Federation
+- **GCP foundation**: VPC, GKE, Workload Identity Federation, Artifact Registry, Cloud Run, Cloud Build triggers
 - **AWS foundation**: VPC, EKS, SPIRE OIDC Provider
 - **SPIFFE trust domain federation** (GCP <-> AWS) with bundle refresh (RFC 9409)
 - **Cross-cloud SVID token validation** via `forge serve` HTTP API

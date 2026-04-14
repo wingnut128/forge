@@ -30,12 +30,24 @@ forge/
 
 ## Current Scope
 
-- **GCP foundation**: VPC, GKE, Workload Identity Federation, Artifact Registry, Cloud Run, Cloud Build triggers
-- **AWS foundation**: VPC, EKS, SPIRE OIDC Provider
+- **GCP foundation**: VPC (multi-subnet, Cloud NAT, mgmt subnet), optional GKE, Workload Identity Federation, Artifact Registry, Cloud Run, Cloud Build triggers
+- **AWS foundation**: VPC (private + public subnets, IGW, NAT Gateway), optional EKS, SPIRE OIDC Provider
+- **SPIRE testing track (default)**: one cheap VM per CSP (GCE + EC2) with persistent state on disk, daily snapshot schedules
+- **Bowtie controllers**: one Bowtie VM per CSP for cross-cloud mesh + admin access (license/admin bootstrap is out-of-band)
+- **Optional managed-state track**: Cloud SQL + RDS Postgres for SPIRE DataStore, KMS CMKs for `gcp_kms` / `aws_kms` KeyManager, Secret Manager / Secrets Manager for admin tokens
 - **SPIFFE trust domain federation** (GCP <-> AWS) with bundle refresh (RFC 9409)
 - **Cross-cloud SVID token validation** via `forge serve` HTTP API
 - **Cedar-based ABAC authorization** for workload access control
 - **Policy-as-code**: Go-based infrastructure policy checks (mandatory/advisory)
+
+## Test Tracks and Cost
+
+| Flags | What you get | Rough monthly floor |
+|---|---|---|
+| (defaults) | 2 VPCs + NAT + 2 SPIRE VMs (e2-small / t3.small) + 2 Bowtie VMs | ~$35-50 |
+| `enable-managed-state=true` | Above + Cloud SQL db-f1-micro + RDS db.t4g.micro + KMS keys | ~$75-110 |
+| `enable-gke=true,enable-eks=true` | Above + full GKE and EKS control planes/node groups | ~$250+ |
+| `enable-multi-az-nat=true` | One NAT Gateway per AZ instead of a single shared one | adds ~$35 |
 
 ## Planned
 
@@ -43,7 +55,7 @@ forge/
 - Tiered approval gates (autonomous / async / synchronous)
 - Pluggable Cedar policy storage (S3, GCS, PostgreSQL, stdin)
 - Cloud landing zones (optional GCP project/AWS account provisioning)
-- AWS Secrets Manager / KMS stack for cert provisioning
+- Post-provision SPIRE federation bootstrap (registration entries, upstream CA)
 
 ## Prerequisites
 

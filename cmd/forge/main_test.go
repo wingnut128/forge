@@ -120,9 +120,19 @@ func (m *recordingMock) hasResource(substr string) bool {
 	return false
 }
 
-func TestDeployFunc_CreatesAllResources(t *testing.T) {
-	// Set Pulumi config via env vars (the format Pulumi expects in mock mode)
-	t.Setenv("PULUMI_CONFIG", `{"forge:environment":"dev","forge:spire-trust-domain":"gcp.example.com","forge:aws-spire-trust-domain":"aws.example.com"}`)
+// deployConfig is the base PULUMI_CONFIG JSON for deployFunc tests; callers layer
+// on additional feature flags as needed.
+const baseDeployConfig = `{
+	"forge:environment":"dev",
+	"forge:spire-trust-domain":"gcp.example.com",
+	"forge:aws-spire-trust-domain":"aws.example.com",
+	"forge:spire-aws-ami":"ami-0123456789abcdef0",
+	"forge:bowtie-gcp-image":"projects/bowtie/global/images/bowtie-1-0-0",
+	"forge:bowtie-aws-ami":"ami-bowtie0000000000"
+}`
+
+func TestDeployFunc_DefaultCreatesCheapTrack(t *testing.T) {
+	t.Setenv("PULUMI_CONFIG", baseDeployConfig)
 
 	mock := &recordingMock{}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
@@ -132,17 +142,41 @@ func TestDeployFunc_CreatesAllResources(t *testing.T) {
 		t.Fatalf("deployFunc failed: %v", err)
 	}
 
-	// GCP resources
-	for _, expected := range []string{"forge-dev-vpc", "forge-dev-gke", "forge-dev-spiffe-pool"} {
+	// Default track: VPCs + SPIRE VMs + Bowtie controllers, no K8s, no managed state.
+	for _, expected := range []string{
+		"forge-dev-vpc",
+		"forge-dev-mgmt-subnet",
+		"forge-dev-spire-server",
+		"forge-dev-bowtie",
+		"forge-dev-public-a",
+		"forge-dev-nat-a",
+	} {
 		if !mock.hasResource(expected) {
-			t.Errorf("expected GCP resource containing %q, got %v", expected, mock.names)
+			t.Errorf("expected resource containing %q, got %v", expected, mock.names)
 		}
 	}
+	for _, notExpected := range []string{"forge-dev-gke", "forge-dev-eks", "forge-dev-spire-sql", "forge-dev-spire-db"} {
+		if mock.hasResource(notExpected) {
+			t.Errorf("did not expect %q when enable-gke/eks/managed-state are off", notExpected)
+		}
+	}
+}
 
-	// AWS resources
-	for _, expected := range []string{"forge-dev-eks", "forge-dev-subnet-a", "forge-dev-spire-oidc-gcp"} {
+func TestDeployFunc_EnableGKEAndEKS(t *testing.T) {
+	cfg := strings.TrimSuffix(baseDeployConfig, "}") + `,"forge:enable-gke":"true","forge:enable-eks":"true"}`
+	t.Setenv("PULUMI_CONFIG", cfg)
+
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return deployFunc(ctx)
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("deployFunc failed: %v", err)
+	}
+
+	for _, expected := range []string{"forge-dev-gke", "forge-dev-spiffe-pool", "forge-dev-eks", "forge-dev-spire-oidc-gcp"} {
 		if !mock.hasResource(expected) {
-			t.Errorf("expected AWS resource containing %q, got %v", expected, mock.names)
+			t.Errorf("expected resource containing %q when K8s flags set, got %v", expected, mock.names)
 		}
 	}
 }

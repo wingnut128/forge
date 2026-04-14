@@ -64,12 +64,22 @@ Set via `pulumi config set forge:<key> <value>`:
 | `environment` | yes | — |
 | `spire-trust-domain` | yes | — |
 | `aws-spire-trust-domain` | yes | — |
+| `spire-aws-ami` | yes | — (Amazon Linux 2023 AMI for your region) |
 | `gcp-region` | no | us-central1 |
 | `aws-region` | no | us-east-1 |
+| `enable-gke` | no | false (opt in to GKE control plane + node pool) |
+| `enable-eks` | no | false (opt in to EKS control plane + node group) |
+| `enable-managed-state` | no | false (opt in to Cloud SQL + RDS + KMS + Secret Manager) |
+| `enable-multi-az-nat` | no | false (when false, single NAT Gateway serves both AZs) |
 | `gke-node-count` | no | 3 |
 | `gke-machine-type` | no | e2-standard-4 |
 | `eks-node-count` | no | 3 |
 | `eks-instance-type` | no | t3.medium |
+| `bowtie-gcp-image` | yes | — (Bowtie controller image self-link) |
+| `bowtie-aws-ami` | yes | — (Bowtie controller AMI) |
+| `bowtie-admin-cidrs` | no | [] (list of CIDRs allowed to reach Bowtie admin ports; empty = locked to 127.0.0.1/32) |
+| `spire-server-version` | no | 1.11.2 |
+| `spire-db-password` | conditional | — (pulumi config set --secret; required when `enable-managed-state=true`) |
 
 ## Environment Variables (forge serve)
 
@@ -90,8 +100,9 @@ The entrypoint (`main.go`) uses Pulumi's **Automation API** (`auto.UpsertStackIn
 ```
 cmd/forge/              → main.go: Automation API entrypoint + serve command; test.go: test stack (AR, Cloud Run, Cloud Build)
 pkg/config/             → config.go: loads and validates ForgeConfig from Pulumi stack config
-pkg/components/gcp/     → network.go, gke.go, workload_identity.go, cloudbuild.go, cloudrun.go, artifact_registry.go (GCP Pulumi components)
-pkg/components/aws/     → vpc.go, eks.go, spire_oidc.go (AWS Pulumi components)
+pkg/components/gcp/     → network.go, gke.go, workload_identity.go, cloudbuild.go, cloudrun.go, artifact_registry.go,
+                          spire_server.go, bowtie.go, managed_state.go (GCP Pulumi components)
+pkg/components/aws/     → vpc.go, eks.go, spire_oidc.go, spire_server.go, bowtie.go, managed_state.go (AWS Pulumi components)
 pkg/attestation/        → trust.go, bundle.go, validate.go (SPIFFE federation + JWT-SVID validation)
 pkg/orchestration/      → server.go: HTTP server for /validate and /healthz endpoints
 pkg/authz/              → authz.go: Cedar-based ABAC authorization
@@ -109,14 +120,16 @@ All infrastructure components (GCP and AWS) follow Pulumi's component resource p
 
 Resource naming convention: `forge-{environment}-{resource}` (e.g., `forge-dev-vpc`).
 
-GCP URNs: `forge:gcp:Network`, `forge:gcp:GKECluster`, `forge:gcp:WorkloadIdentity`, `forge:gcp:ArtifactRegistry`, `forge:gcp:CloudRunService`, `forge:gcp:CloudBuildTrigger`.
-AWS URNs: `forge:aws:VPC`, `forge:aws:EKSCluster`, `forge:aws:SPIREOIDCProvider`.
+GCP URNs: `forge:gcp:Network`, `forge:gcp:GKECluster`, `forge:gcp:WorkloadIdentity`, `forge:gcp:ArtifactRegistry`, `forge:gcp:CloudRunService`, `forge:gcp:CloudBuildTrigger`, `forge:gcp:SPIREServer`, `forge:gcp:BowtieController`, `forge:gcp:ManagedState`.
+AWS URNs: `forge:aws:VPC`, `forge:aws:EKSCluster`, `forge:aws:SPIREOIDCProvider`, `forge:aws:SPIREServer`, `forge:aws:BowtieController`, `forge:aws:ManagedState`.
 
 ### Deploy Pipeline Flow
 
 `deployFunc` in `main.go` runs policy checks first, then chains:
-- **GCP**: Network → GKECluster → WorkloadIdentity (accepts AWS SVIDs)
-- **AWS**: VPC → EKSCluster → SPIREOIDCProvider (accepts GCP SVIDs)
+- **GCP foundation**: Network (VPC + mgmt subnet + Cloud NAT) → optionally GKECluster + WorkloadIdentity → optionally ManagedState → SPIREServer VM → BowtieController VM
+- **AWS foundation**: VPC (private/public subnets + IGW + NAT) → optionally EKSCluster + SPIREOIDCProvider → optionally ManagedState → SPIREServer EC2 → BowtieController EC2
+
+The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s or managed-state paths.
 
 ### Authorization Model
 

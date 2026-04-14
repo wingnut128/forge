@@ -15,6 +15,12 @@
 
 ## Medium Priority (infrastructure)
 - [ ] Cloud landing zones — optional provisioning of GCP project/org and AWS account/VPC foundation (conditional flag, not always needed)
+- [x] Well-architected VPCs (Cloud NAT / NAT Gateway, multi-AZ, mgmt subnet)
+- [x] Cheap VM-based SPIRE server track (GCE + EC2, disk-backed state)
+- [x] Bowtie controller infrastructure (one VM per CSP, admin firewall)
+- [x] Feature-flagged managed state (Cloud SQL + RDS + KMS + Secret Manager)
+- [ ] Post-provision SPIRE bootstrap: federation registration, upstream CA wiring, agent join tokens
+- [ ] Bowtie licensing + initial admin bootstrap automation
 
 ## Low Priority (features & infra)
 - [x] Implement AWS components (`pkg/components/aws/`)

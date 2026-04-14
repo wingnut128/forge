@@ -13,18 +13,25 @@ type NetworkArgs struct {
 	Region      string
 }
 
-// Network is a Pulumi component resource that provisions a VPC with
-// a primary subnet and secondary ranges for GKE pods/services.
+// Network is a Pulumi component resource that provisions a VPC with:
+//   - a primary subnet (with GKE secondary ranges) for workloads
+//   - a management subnet for SPIRE server and Bowtie controller VMs
+//   - Cloud Router + Cloud NAT so private instances have egress
 type Network struct {
 	pulumi.ResourceState
 
-	ID       pulumi.IDOutput
-	SubnetID pulumi.IDOutput
+	ID             pulumi.IDOutput
+	SelfLink       pulumi.StringOutput
+	SubnetID       pulumi.IDOutput
+	SubnetSelfLink pulumi.StringOutput
+	MgmtSubnetID   pulumi.IDOutput
+	MgmtSubnetLink pulumi.StringOutput
+	Region         string
 }
 
-// NewNetwork creates the VPC, subnet, and firewall rules.
+// NewNetwork creates the VPC, subnets, firewall rules, Cloud Router, and Cloud NAT.
 func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pulumi.ResourceOption) (*Network, error) {
-	component := &Network{}
+	component := &Network{Region: args.Region}
 	err := ctx.RegisterComponentResource("forge:gcp:Network", name, component, opts...)
 	if err != nil {
 		return nil, err
@@ -33,7 +40,6 @@ func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pul
 	parentOpt := pulumi.Parent(component)
 	namePrefix := fmt.Sprintf("forge-%s", args.Environment)
 
-	// VPC — custom subnet mode for explicit control
 	vpc, err := compute.NewNetwork(ctx, namePrefix+"-vpc", &compute.NetworkArgs{
 		AutoCreateSubnetworks: pulumi.Bool(false),
 		Description:           pulumi.Sprintf("Forge %s VPC", args.Environment),
@@ -42,7 +48,6 @@ func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pul
 		return nil, err
 	}
 
-	// Primary subnet with secondary ranges for GKE
 	subnet, err := compute.NewSubnetwork(ctx, namePrefix+"-subnet", &compute.SubnetworkArgs{
 		Network:     vpc.ID(),
 		IpCidrRange: pulumi.String("10.0.0.0/20"),
@@ -63,7 +68,18 @@ func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pul
 		return nil, err
 	}
 
-	// Allow internal traffic within the VPC
+	// Management subnet for SPIRE server + Bowtie controller VMs.
+	// Kept disjoint from the primary /20 and the pod/service secondary ranges.
+	mgmtSubnet, err := compute.NewSubnetwork(ctx, namePrefix+"-mgmt-subnet", &compute.SubnetworkArgs{
+		Network:               vpc.ID(),
+		IpCidrRange:           pulumi.String("10.0.16.0/24"),
+		Region:                pulumi.String(args.Region),
+		PrivateIpGoogleAccess: pulumi.Bool(true),
+	}, parentOpt)
+	if err != nil {
+		return nil, err
+	}
+
 	_, err = compute.NewFirewall(ctx, namePrefix+"-allow-internal", &compute.FirewallArgs{
 		Network: vpc.ID(),
 		Allows: compute.FirewallAllowArray{
@@ -85,12 +101,37 @@ func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pul
 		return nil, err
 	}
 
+	// Cloud Router + Cloud NAT so private instances can reach package repos,
+	// Bowtie licensing endpoints, SPIRE upstream CAs, etc.
+	router, err := compute.NewRouter(ctx, namePrefix+"-router", &compute.RouterArgs{
+		Network: vpc.ID(),
+		Region:  pulumi.String(args.Region),
+	}, parentOpt)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = compute.NewRouterNat(ctx, namePrefix+"-nat", &compute.RouterNatArgs{
+		Router:                        router.Name,
+		Region:                        pulumi.String(args.Region),
+		NatIpAllocateOption:           pulumi.String("AUTO_ONLY"),
+		SourceSubnetworkIpRangesToNat: pulumi.String("ALL_SUBNETWORKS_ALL_IP_RANGES"),
+	}, parentOpt)
+	if err != nil {
+		return nil, err
+	}
+
 	component.ID = vpc.ID()
+	component.SelfLink = vpc.SelfLink
 	component.SubnetID = subnet.ID()
+	component.SubnetSelfLink = subnet.SelfLink
+	component.MgmtSubnetID = mgmtSubnet.ID()
+	component.MgmtSubnetLink = mgmtSubnet.SelfLink
 
 	if err := ctx.RegisterResourceOutputs(component, pulumi.Map{
-		"vpcId":    vpc.ID(),
-		"subnetId": subnet.ID(),
+		"vpcId":        vpc.ID(),
+		"subnetId":     subnet.ID(),
+		"mgmtSubnetId": mgmtSubnet.ID(),
 	}); err != nil {
 		return nil, err
 	}

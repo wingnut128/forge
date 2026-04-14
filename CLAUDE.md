@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Always update documentation before committing new features.** When adding or changing functionality, update README.md, CLAUDE.md, and TODO.md as part of the same PR — not as a follow-up. Documentation includes: code layout, commands, config keys, architecture descriptions, and planned/completed scope.
 - Follow the bisect commits rule from the global CLAUDE.md — each commit is a single logical change.
 - Run `go build ./...`, `go test ./...`, and `go vet ./...` before committing.
+- For GitHub operations, prefer the `mcp__github__*` MCP tools; fall back to the `gh` CLI only when the MCP server is unavailable or lacks the needed capability.
 
 ## What This Is
 

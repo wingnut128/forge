@@ -5,6 +5,7 @@ import (
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/wingnut128/forge/pkg/spire"
 )
 
 // SPIREServerArgs configures the AWS SPIRE server EC2 instance.
@@ -115,17 +116,25 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 }
 
 func spireAWSUserData(args *SPIREServerArgs) string {
-	mode := "disk"
+	mode := spire.StateModeDisk
 	if args.ManagedStateMode {
-		mode = "managed"
+		mode = spire.StateModeManaged
 	}
+	serverHCL, err := spire.RenderServerHCL(spire.ServerConfig{
+		TrustDomain:           args.TrustDomain,
+		PeerTrustDomain:       args.PeerTrustDomain,
+		PeerBundleEndpointURL: fmt.Sprintf("https://%s:8443", args.PeerTrustDomain),
+		StateMode:             mode,
+		ManagedDBConnString:   "postgres://spire@127.0.0.1:5432/spire", // Phase 2: real managed DSN
+	})
+	if err != nil {
+		serverHCL = "# ERROR rendering SPIRE config: " + err.Error()
+	}
+
 	return fmt.Sprintf(`#!/bin/bash
 set -euo pipefail
 SPIRE_VERSION=%q
-STATE_MODE=%q
-TRUST_DOMAIN=%q
 
-# Mount data volume at /var/lib/spire
 DEV=/dev/xvdf
 mkdir -p /var/lib/spire
 if ! blkid "$DEV" >/dev/null 2>&1; then
@@ -143,16 +152,9 @@ if [ ! -x /usr/local/bin/spire-server ]; then
   install -m 0755 spire-${SPIRE_VERSION}/bin/spire-server /usr/local/bin/spire-server
 fi
 
-mkdir -p /etc/spire
-cat >/etc/spire/server.conf <<CONF
-server {
-  bind_address = "0.0.0.0"
-  bind_port = "8081"
-  trust_domain = "${TRUST_DOMAIN}"
-  data_dir = "/var/lib/spire/data"
-  log_level = "INFO"
-}
-# state mode: ${STATE_MODE}
+mkdir -p /etc/spire /etc/spire/certs /var/lib/spire/data
+cat >/etc/spire/server.conf <<'CONF'
+%s
 CONF
 
 cat >/etc/systemd/system/spire-server.service <<UNIT
@@ -171,5 +173,5 @@ UNIT
 
 systemctl daemon-reload
 systemctl enable --now spire-server
-`, args.SPIREVersion, mode, args.TrustDomain)
+`, args.SPIREVersion, serverHCL)
 }

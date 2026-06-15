@@ -138,6 +138,66 @@ func RenderServerHCL(cfg ServerConfig) (string, error) {
 	return sb.String(), nil
 }
 
+// AgentConfig is the input for RenderAgentHCL.
+type AgentConfig struct {
+	TrustDomain   string // required
+	ServerAddress string // required, e.g. "spire-gcp-server"
+	ServerPort    string // default "8081"
+	DataDir       string // default "/var/lib/spire/agent"
+	LogLevel      string // default "INFO"
+}
+
+var agentTemplate = template.Must(template.New("agent").Parse(
+	`agent {
+    data_dir = "{{.DataDir}}"
+    log_level = "{{.LogLevel}}"
+    trust_domain = "{{.TrustDomain}}"
+    server_address = "{{.ServerAddress}}"
+    server_port = "{{.ServerPort}}"
+}
+
+plugins {
+    NodeAttestor "join_token" {
+        plugin_data {}
+    }
+
+    KeyManager "disk" {
+        plugin_data {
+            directory = "{{.DataDir}}"
+        }
+    }
+
+    WorkloadAttestor "unix" {
+        plugin_data {}
+    }
+}
+`))
+
+// RenderAgentHCL renders a SPIRE agent.conf using join-token node attestation.
+func RenderAgentHCL(cfg AgentConfig) (string, error) {
+	if cfg.TrustDomain == "" {
+		return "", fmt.Errorf("spire: TrustDomain is required")
+	}
+	if cfg.ServerAddress == "" {
+		return "", fmt.Errorf("spire: ServerAddress is required")
+	}
+	if cfg.ServerPort == "" {
+		cfg.ServerPort = "8081"
+	}
+	if cfg.DataDir == "" {
+		cfg.DataDir = "/var/lib/spire/agent"
+	}
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = "INFO"
+	}
+
+	var sb strings.Builder
+	if err := agentTemplate.Execute(&sb, cfg); err != nil {
+		return "", fmt.Errorf("spire: rendering agent config: %w", err)
+	}
+	return sb.String(), nil
+}
+
 func applyServerDefaults(cfg *ServerConfig) {
 	if cfg.DataDir == "" {
 		cfg.DataDir = "/var/lib/spire/data"

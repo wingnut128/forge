@@ -100,3 +100,24 @@ func TestRenderServerHCL_RequiresFields(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderAgentHCL_GCP(t *testing.T) {
+	cfg := AgentConfig{
+		TrustDomain:   "forge.gcp.local",
+		ServerAddress: "spire-gcp-server",
+	}
+	got, err := RenderAgentHCL(cfg)
+	if err != nil {
+		t.Fatalf("RenderAgentHCL: %v", err)
+	}
+	want := readGolden(t, "agent_gcp.golden")
+	if got != want {
+		t.Errorf("rendered HCL mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderAgentHCL_RequiresFields(t *testing.T) {
+	if _, err := RenderAgentHCL(AgentConfig{}); err == nil {
+		t.Fatal("expected error for missing trust domain")
+	}
+}

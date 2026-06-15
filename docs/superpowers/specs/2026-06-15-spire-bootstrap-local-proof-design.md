@@ -31,7 +31,8 @@ audience = the AWS trust domain, and `forge serve` (acting as the AWS side)
 validates it through the **existing** `pkg/attestation` / `/validate` code path,
 returning `valid: true` with the GCP SpiffeID.
 
-Constraints: reproducible by anyone with Docker, `$0`, no cloud credentials, and
+Constraints: reproducible by anyone with Apple `container` (or Docker as a
+fallback), `$0`, no cloud credentials, and
 it exercises the real validation code (`BundleRefresher`, `ValidateRemoteSVID`,
 `orchestration.Server`) unchanged.
 
@@ -77,7 +78,14 @@ Pure functions, no I/O. Fully unit-testable with golden files.
 The local harness. Consumes `pkg/spire` for config; owns no SPIRE config of its
 own (no hand-maintained HCL).
 
-- `docker-compose.yml`:
+Runtime target: **Apple `container`** (the macOS containerization CLI) is the
+primary runtime — it has stronger per-container isolation (one lightweight VM
+each) and cleaner networking than Docker Desktop on macOS. **Docker / `docker
+compose` is a documented fallback** so the demo runs for anyone without
+`container`. Both runtimes consume identical, `pkg/spire`-rendered config and the
+same `bootstrap.sh`; only the thin orchestration layer forks.
+
+Nodes (same under either runtime):
   - `spire-gcp-server`, `spire-gcp-agent`
   - `spire-aws-server`, `spire-aws-agent`
   - one **bundle-publisher** sidecar per side: a tiny container that periodically
@@ -85,8 +93,17 @@ own (no hand-maintained HCL).
     static file over **plain HTTP**. This is what `forge serve`'s
     `BundleRefresher` GETs. (Rationale below.)
   - trust domains: `forge.gcp.local` and `forge.aws.local`.
-- `bootstrap.sh`: the bootstrap sequence (see Bootstrap Flow).
-- Config files rendered into the compose context from `pkg/spire` via a small
+
+Orchestration:
+  - Primary: `demo/run.sh` driving the `container` CLI — `container network
+    create forge-demo`, then one `container run` per node on that shared network,
+    with explicit readiness polls (no compose `depends_on`).
+  - Fallback: `demo/docker-compose.yml` for the Docker path.
+  - `make demo` selects the runtime (prefers `container`, falls back to Docker)
+    and runs `bootstrap.sh`.
+- `bootstrap.sh`: the bootstrap sequence (see Bootstrap Flow). Runtime-agnostic —
+  it `exec`s into running containers by name, which both runtimes support.
+- Config files rendered into the run context from `pkg/spire` via a small
   generator entrypoint (e.g. `go run ./demo/gen` or a `make` target) so the
   rendered HCL is never hand-edited.
 

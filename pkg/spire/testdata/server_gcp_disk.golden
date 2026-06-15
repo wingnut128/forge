@@ -1,0 +1,44 @@
+server {
+    bind_address = "0.0.0.0"
+    bind_port = "8081"
+    trust_domain = "forge.gcp.local"
+    data_dir = "/var/lib/spire/data"
+    log_level = "INFO"
+
+    federation {
+        bundle_endpoint {
+            address = "0.0.0.0"
+            port = 8443
+            profile "https_web" {
+                serving_cert_file {
+                    cert_file_path = "/etc/spire/certs/server.crt"
+                    key_file_path = "/etc/spire/certs/server.key"
+                }
+            }
+        }
+
+        federates_with "forge.aws.local" {
+            bundle_endpoint_url = "https://spire-aws-server:8443"
+            bundle_endpoint_profile "https_web" {}
+        }
+    }
+}
+
+plugins {
+    DataStore "sql" {
+        plugin_data {
+            database_type = "sqlite3"
+            connection_string = "/var/lib/spire/data/datastore.sqlite3"
+        }
+    }
+
+    KeyManager "disk" {
+        plugin_data {
+            keys_path = "/var/lib/spire/data/keys.json"
+        }
+    }
+
+    NodeAttestor "join_token" {
+        plugin_data {}
+    }
+}

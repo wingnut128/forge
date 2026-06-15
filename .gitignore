@@ -41,3 +41,7 @@ Pulumi.*.yaml
 # OS
 .DS_Store
 Thumbs.db
+
+# Demo runtime output
+demo/generated/
+demo/certs/

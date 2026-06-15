@@ -82,7 +82,9 @@ go run ./cmd/forge up
 
 ## Local Federation Proof (Phase 1)
 
-Prove the cross-cloud trust model end-to-end with no cloud spend:
+Prove the cross-cloud trust model end-to-end with no cloud spend. Requires a
+container runtime — Apple `container` (default, macOS) or Docker. The first run
+pulls the SPIRE 1.11.2 images (allow a few minutes); no cloud credentials.
 
 ```bash
 make demo            # Apple `container` runtime (default)
@@ -91,7 +93,20 @@ make demo-clean      # tear down
 ```
 
 This stands up two federated SPIRE servers (GCP and AWS roles), mints a JWT-SVID
-on the GCP side, and validates it on the AWS side through `forge serve`. See
-`docs/why-this-model.md` for why the model is valid and
-`docs/superpowers/specs/2026-06-15-spire-bootstrap-local-proof-design.md` for the
-design.
+on the GCP side, and validates it on the AWS side through `forge serve` — the
+real `pkg/attestation` path. A successful run ends with:
+
+```
+==> validating the SVID through forge serve (AWS role)
+validate response: {"valid":true,"spiffe_id":"spiffe://forge.gcp.local/workload/demo","trust_domain":"forge.gcp.local",...}
+PASS: cross-cloud SVID validated (remote td=forge.gcp.local)
+```
+
+That `PASS` is the whole thesis: a workload identity minted in one cloud,
+cryptographically verified in the other via SPIFFE federation — no shared secret,
+no cross-cloud IAM trust. `make demo` exits `0` on success.
+
+See [`demo/README.md`](demo/README.md) for the architecture, the bootstrap flow,
+and full expected output; [`docs/why-this-model.md`](docs/why-this-model.md) for
+why the model is valid; and the
+[design spec](docs/superpowers/specs/2026-06-15-spire-bootstrap-local-proof-design.md).

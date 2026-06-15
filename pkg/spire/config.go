@@ -145,6 +145,7 @@ type AgentConfig struct {
 	ServerPort    string // default "8081"
 	DataDir       string // default "/var/lib/spire/agent"
 	LogLevel      string // default "INFO"
+	SocketPath    string // default "/tmp/agent.sock" (Workload API socket)
 }
 
 var agentTemplate = template.Must(template.New("agent").Parse(
@@ -154,6 +155,7 @@ var agentTemplate = template.Must(template.New("agent").Parse(
     trust_domain = "{{.TrustDomain}}"
     server_address = "{{.ServerAddress}}"
     server_port = "{{.ServerPort}}"
+    socket_path = "{{.SocketPath}}"
 }
 
 plugins {
@@ -189,6 +191,9 @@ func RenderAgentHCL(cfg AgentConfig) (string, error) {
 	}
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "INFO"
+	}
+	if cfg.SocketPath == "" {
+		cfg.SocketPath = "/tmp/agent.sock"
 	}
 
 	var sb strings.Builder

@@ -4,6 +4,7 @@ agent {
     trust_domain = "forge.gcp.local"
     server_address = "spire-gcp-server"
     server_port = "8081"
+    socket_path = "/tmp/agent.sock"
 }
 
 plugins {

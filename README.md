@@ -79,3 +79,19 @@ go run ./cmd/forge preview
 # Deploy
 go run ./cmd/forge up
 ```
+
+## Local Federation Proof (Phase 1)
+
+Prove the cross-cloud trust model end-to-end with no cloud spend:
+
+```bash
+make demo            # Apple `container` runtime (default)
+DEMO_RUNTIME=docker make demo   # Docker fallback
+make demo-clean      # tear down
+```
+
+This stands up two federated SPIRE servers (GCP and AWS roles), mints a JWT-SVID
+on the GCP side, and validates it on the AWS side through `forge serve`. See
+`docs/why-this-model.md` for why the model is valid and
+`docs/superpowers/specs/2026-06-15-spire-bootstrap-local-proof-design.md` for the
+design.

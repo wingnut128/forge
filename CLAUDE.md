@@ -43,6 +43,9 @@ go test ./...
 
 # Run a single test
 go test ./pkg/... -run TestName
+
+# Run the local cross-cloud federation proof (no cloud spend)
+make demo
 ```
 
 `FORGE_STACK` defaults to `"dev"` if unset.
@@ -107,6 +110,8 @@ pkg/attestation/        → trust.go, bundle.go, validate.go (SPIFFE federation 
 pkg/orchestration/      → server.go: HTTP server for /validate and /healthz endpoints
 pkg/authz/              → authz.go: Cedar-based ABAC authorization
 pkg/policies/           → policy.go, gcp.go, aws.go: infrastructure policy checks
+pkg/spire/              → config.go: renders federation-aware SPIRE server/agent HCL (shared by VM scripts + demo)
+demo/                   → local cross-cloud federation proof (gen, certs, bootstrap, run.sh, compose)
 policies/examples/      → Example Cedar policies for cross-cloud access control
 ```
 

@@ -19,7 +19,7 @@
 - [x] Cheap VM-based SPIRE server track (GCE + EC2, disk-backed state)
 - [x] Bowtie controller infrastructure (one VM per CSP, admin firewall)
 - [x] Feature-flagged managed state (Cloud SQL + RDS + KMS + Secret Manager)
-- [x] Post-provision SPIRE bootstrap — Phase 1 local proof: federation bundle exchange, registration entry, agent join token, cross-cloud SVID validation (`make demo`)
+- [x] Post-provision SPIRE bootstrap — **Phase 1 local proof complete** (verified live via `make demo` on Apple `container`; MR !51): federation bundle exchange, registration entry, agent join token, GCP-minted JWT-SVID validated on the AWS-role `forge serve`
 - [ ] Post-provision SPIRE bootstrap — Phase 2 live: wire bootstrap against live GCP/AWS VMs, real upstream CA, cloud-native node attestors
 - [ ] Bowtie licensing + initial admin bootstrap automation
 

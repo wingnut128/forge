@@ -88,11 +88,14 @@ same `bootstrap.sh`; only the thin orchestration layer forks.
 Nodes (same under either runtime):
   - `spire-gcp-server`, `spire-gcp-agent`
   - `spire-aws-server`, `spire-aws-agent`
-  - one **bundle-publisher** sidecar per side: a tiny container that periodically
-    runs `spire-server bundle show -format spiffe` and serves the result as a
-    static file over **plain HTTP**. This is what `forge serve`'s
-    `BundleRefresher` GETs. (Rationale below.)
   - trust domains: `forge.gcp.local` and `forge.aws.local`.
+
+No bundle-publisher sidecar. Each SPIRE server exposes its **own native RFC 9409
+bundle endpoint** over TLS using the `https_web` profile, served with a cert
+issued by a throwaway **demo CA** generated at instantiation (see Bundle Endpoint
+TLS below). `forge serve`'s `BundleRefresher` fetches that endpoint directly; the
+demo CA, installed in the `forge serve` container's system trust store, makes the
+default `http.Client` trust it with no runtime code change.
 
 Orchestration:
   - Primary: `demo/run.sh` driving the `container` CLI — `container network
@@ -106,6 +109,30 @@ Orchestration:
 - Config files rendered into the run context from `pkg/spire` via a small
   generator entrypoint (e.g. `go run ./demo/gen` or a `make` target) so the
   rendered HCL is never hand-edited.
+
+#### Bundle Endpoint TLS (demo CA + `https_web`)
+
+The bundle endpoints are served over real TLS, not plain HTTP, using a local
+chain stamped at instantiation. This uses SPIRE's actual bundle endpoint and
+requires no change to `BundleRefresher`.
+
+- `demo/gen-certs.sh` (run by `make demo` before bring-up): generate a throwaway
+  **demo CA**, then issue one server cert per SPIRE bundle endpoint with SAN =
+  the server's hostname on the `forge-demo` network (`spire-gcp-server`,
+  `spire-aws-server`).
+- Each SPIRE server's `federation { bundle_endpoint { ... } }` is configured with
+  `profile = "https_web"` and pointed at its issued cert/key. Each
+  `federates_with` peer entry likewise uses `https_web`.
+- The demo CA is installed into the system trust store of **three** container
+  roles: both SPIRE servers (so each trusts the peer's `https_web` endpoint when
+  `federates_with` fetches the peer bundle) and the `forge serve` container (so
+  `BundleRefresher`'s default `http.Client` trusts the endpoint). Trust is
+  injected at the OS layer — no Go code change.
+- **Two distinct trust layers, do not conflate:** the demo CA secures the
+  *transport* (TLS to the bundle endpoint); the SPIFFE trust bundle exchanged in
+  bootstrap step 2 carries the *SVID-signing* keys. The `https_web` choice (vs
+  `https_spiffe`, which would need a `BundleRefresher` mTLS change) is what keeps
+  Phase 1 free of runtime code changes.
 
 ### Component 3 — Documentation
 
@@ -136,37 +163,44 @@ This script is the concrete realization of the long-standing TODO
 6. **Validate:** POST the token to `forge serve` `/validate` (configured with
    `FORGE_LOCAL_TRUST_DOMAIN=forge.aws.local`,
    `FORGE_REMOTE_TRUST_DOMAIN=forge.gcp.local`,
-   `FORGE_BUNDLE_ENDPOINT_URL=http://<gcp-bundle-publisher>`). Assert
+   `FORGE_BUNDLE_ENDPOINT_URL=https://spire-gcp-server:8443`). Assert
    `valid: true` and the SpiffeID is `spiffe://forge.gcp.local/...`.
 
 ## Data Flow
 
 ```
 spire-gcp-server ──issues JWT-SVID(aud=forge.aws.local)──> demo workload
-                                                              │ token
-                                                              ▼
-                                                  forge serve (role: AWS)
-                                                     │ BundleRefresher GET (plain HTTP)
-                                                     ▼
-                                  bundle-publisher(gcp) ── serves SPIFFE bundle JSON
-                                                     │
-                                                     ▼
-                                  ValidateRemoteSVID → valid:true,
-                                                       spiffe://forge.gcp.local/workload
+        │                                                     │ token
+        │ native bundle endpoint                              ▼
+        │ (https_web, demo-CA cert)              forge serve (role: AWS)
+        └──────────────────────────────────┐       │ BundleRefresher GET (TLS,
+                                            ▼       ▼   demo CA in trust store)
+                          serves SPIFFE bundle JSON ─┘
+                                            │
+                                            ▼
+                          ValidateRemoteSVID → valid:true,
+                                               spiffe://forge.gcp.local/workload
 ```
 
-The right-hand column is all existing, unchanged Forge code.
+`forge serve`, `BundleRefresher`, and `ValidateRemoteSVID` are all existing,
+unchanged Forge code; trust in the endpoint cert comes from the demo CA installed
+in the container's OS trust store.
 
 ## Key Design Decisions
 
-- **Bundle-publisher sidecar over SPIFFE-mTLS bundle auth.** `BundleRefresher`
-  does a plain `http.Client` GET and `spiffebundle.Parse`. SPIRE's native
-  `https_spiffe` bundle endpoint requires SPIFFE mTLS, which the current client
-  does not speak. Rather than complicate the runtime for a local demo, a sidecar
-  serves the genuine SPIRE-produced SPIFFE bundle (`bundle show -format spiffe`)
-  over plain HTTP. The bundle content is real and RFC 9409-shaped; only the
-  transport is simplified. Phase 2 revisits transport (web-PKI bundle endpoint or
-  SPIFFE-mTLS client), not the model.
+- **Native `https_web` bundle endpoint + demo CA, over a publisher sidecar.**
+  `BundleRefresher` does a plain `http.Client` GET and `spiffebundle.Parse`.
+  SPIRE's native `https_spiffe` bundle endpoint requires SPIFFE mTLS, which the
+  current client does not speak. Rather than either (a) modify the runtime to
+  speak mTLS or (b) serve the bundle over plain HTTP via a sidecar, the demo
+  stamps a throwaway CA at instantiation, serves each SPIRE server's real bundle
+  endpoint with `https_web`, and installs the CA in the relevant container trust
+  stores. This uses SPIRE's actual endpoint, drops the sidecar, keeps
+  `BundleRefresher` unchanged (trust injected at the OS layer), and exercises the
+  web-PKI transport shape Phase 2 will use — at the cost of a cert-generation step
+  and CA injection into three container roles. `https_spiffe` is the more
+  production-faithful endgame but is deferred because it requires a
+  `BundleRefresher` change.
 - **Config generator is the shared seam.** Putting rendering in `pkg/spire` means
   the VM startup scripts and the demo cannot drift, and Phase 2 inherits the
   federation-aware config for free.

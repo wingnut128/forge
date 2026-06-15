@@ -36,6 +36,9 @@ type ServerConfig struct {
 	BundleEndpointPort    string // default "8443"
 	BundleEndpointCert    string // default "/etc/spire/certs/server.crt"
 	BundleEndpointKey     string // default "/etc/spire/certs/server.key"
+	// BundleEndpointSyncInterval is the serving_cert_file file_sync_interval.
+	// SPIRE 1.11.x requires this duration (empty -> "invalid duration" error).
+	BundleEndpointSyncInterval string // default "1h"
 
 	// ManagedDBConnString is the Postgres connection string used when
 	// StateMode is StateModeManaged. Ignored for disk mode.
@@ -64,6 +67,7 @@ var serverTemplate = template.Must(template.New("server").Parse(
                 serving_cert_file {
                     cert_file_path = "{{.BundleEndpointCert}}"
                     key_file_path = "{{.BundleEndpointKey}}"
+                    file_sync_interval = "{{.BundleEndpointSyncInterval}}"
                 }
             }
         }
@@ -146,6 +150,10 @@ type AgentConfig struct {
 	DataDir       string // default "/var/lib/spire/agent"
 	LogLevel      string // default "INFO"
 	SocketPath    string // default "/tmp/agent.sock" (Workload API socket)
+	// InsecureBootstrap lets the agent accept the server's trust bundle on first
+	// connect without a pre-shared trust_bundle_path. True is fine for the local
+	// demo; Phase 2 (live) should pin a trust bundle instead. Defaults false.
+	InsecureBootstrap bool
 }
 
 var agentTemplate = template.Must(template.New("agent").Parse(
@@ -156,6 +164,7 @@ var agentTemplate = template.Must(template.New("agent").Parse(
     server_address = "{{.ServerAddress}}"
     server_port = "{{.ServerPort}}"
     socket_path = "{{.SocketPath}}"
+    insecure_bootstrap = {{.InsecureBootstrap}}
 }
 
 plugins {
@@ -230,5 +239,8 @@ func applyServerDefaults(cfg *ServerConfig) {
 	}
 	if cfg.BundleEndpointKey == "" {
 		cfg.BundleEndpointKey = "/etc/spire/certs/server.key"
+	}
+	if cfg.BundleEndpointSyncInterval == "" {
+		cfg.BundleEndpointSyncInterval = "1h"
 	}
 }

@@ -13,6 +13,7 @@ server {
                 serving_cert_file {
                     cert_file_path = "/etc/spire/certs/server.crt"
                     key_file_path = "/etc/spire/certs/server.key"
+                    file_sync_interval = "1h"
                 }
             }
         }

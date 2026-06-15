@@ -31,6 +31,36 @@ func TestRenderServerHCL_GCPDisk(t *testing.T) {
 	}
 }
 
+func TestRenderServerHCL_AWSManaged(t *testing.T) {
+	cfg := ServerConfig{
+		TrustDomain:           "forge.aws.local",
+		PeerTrustDomain:       "forge.gcp.local",
+		PeerBundleEndpointURL: "https://spire-gcp-server:8443",
+		StateMode:             StateModeManaged,
+		ManagedDBConnString:   "postgres://spire@db.example:5432/spire",
+	}
+	got, err := RenderServerHCL(cfg)
+	if err != nil {
+		t.Fatalf("RenderServerHCL: %v", err)
+	}
+	want := readGolden(t, "server_aws_managed.golden")
+	if got != want {
+		t.Errorf("rendered HCL mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderServerHCL_ManagedRequiresConnString(t *testing.T) {
+	_, err := RenderServerHCL(ServerConfig{
+		TrustDomain:           "forge.aws.local",
+		PeerTrustDomain:       "forge.gcp.local",
+		PeerBundleEndpointURL: "https://spire-gcp-server:8443",
+		StateMode:             StateModeManaged,
+	})
+	if err == nil {
+		t.Fatal("expected error for managed mode without conn string")
+	}
+}
+
 func TestRenderServerHCL_RequiresFields(t *testing.T) {
 	cases := []struct {
 		name string

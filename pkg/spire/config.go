@@ -5,6 +5,7 @@ package spire
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -107,17 +108,27 @@ func RenderServerHCL(cfg ServerConfig) (string, error) {
 	}
 	applyServerDefaults(&cfg)
 
+	port, portErr := strconv.Atoi(cfg.BundleEndpointPort)
+	if portErr != nil {
+		return "", fmt.Errorf("spire: BundleEndpointPort %q is not a valid port: %w", cfg.BundleEndpointPort, portErr)
+	}
+	if port <= 0 {
+		return "", fmt.Errorf("spire: BundleEndpointPort %q is not a valid port: must be positive", cfg.BundleEndpointPort)
+	}
+
 	data := serverTemplateData{ServerConfig: cfg}
 	switch cfg.StateMode {
+	case StateModeDisk:
+		data.DBType = "sqlite3"
+		data.ConnString = cfg.DataDir + "/datastore.sqlite3"
 	case StateModeManaged:
 		if cfg.ManagedDBConnString == "" {
 			return "", fmt.Errorf("spire: ManagedDBConnString is required for managed mode")
 		}
 		data.DBType = "postgres"
 		data.ConnString = cfg.ManagedDBConnString
-	default: // disk
-		data.DBType = "sqlite3"
-		data.ConnString = cfg.DataDir + "/datastore.sqlite3"
+	default:
+		return "", fmt.Errorf("spire: unknown StateMode %q", cfg.StateMode)
 	}
 
 	var sb strings.Builder

@@ -32,8 +32,41 @@ func TestRenderServerHCL_GCPDisk(t *testing.T) {
 }
 
 func TestRenderServerHCL_RequiresFields(t *testing.T) {
-	_, err := RenderServerHCL(ServerConfig{StateMode: StateModeDisk})
-	if err == nil {
-		t.Fatal("expected error for missing trust domain, got nil")
+	cases := []struct {
+		name string
+		cfg  ServerConfig
+	}{
+		{
+			name: "missing TrustDomain",
+			cfg: ServerConfig{
+				PeerTrustDomain:       "forge.aws.local",
+				PeerBundleEndpointURL: "https://spire-aws-server:8443",
+				StateMode:             StateModeDisk,
+			},
+		},
+		{
+			name: "missing PeerTrustDomain",
+			cfg: ServerConfig{
+				TrustDomain:           "forge.gcp.local",
+				PeerBundleEndpointURL: "https://spire-aws-server:8443",
+				StateMode:             StateModeDisk,
+			},
+		},
+		{
+			name: "missing PeerBundleEndpointURL",
+			cfg: ServerConfig{
+				TrustDomain:     "forge.gcp.local",
+				PeerTrustDomain: "forge.aws.local",
+				StateMode:       StateModeDisk,
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := RenderServerHCL(tc.cfg)
+			if err == nil {
+				t.Fatalf("expected error for %s, got nil", tc.name)
+			}
+		})
 	}
 }

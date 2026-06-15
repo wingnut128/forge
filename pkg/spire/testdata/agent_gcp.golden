@@ -1,0 +1,24 @@
+agent {
+    data_dir = "/var/lib/spire/agent"
+    log_level = "INFO"
+    trust_domain = "forge.gcp.local"
+    server_address = "spire-gcp-server"
+    server_port = "8081"
+    socket_path = "/tmp/agent.sock"
+}
+
+plugins {
+    NodeAttestor "join_token" {
+        plugin_data {}
+    }
+
+    KeyManager "disk" {
+        plugin_data {
+            directory = "/var/lib/spire/agent"
+        }
+    }
+
+    WorkloadAttestor "unix" {
+        plugin_data {}
+    }
+}

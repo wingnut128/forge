@@ -1,0 +1,50 @@
+# Docker fallback for the local federation demo. Apple `container` is primary
+# (see demo/run.sh). Requires `go run ./demo/gen demo/generated`,
+# `./demo/gen-certs.sh demo/certs`, and a host-built demo/generated/forge first
+# (run.sh DEMO_RUNTIME=docker does all of this).
+services:
+  spire-gcp-server:
+    image: ghcr.io/spiffe/spire-server:1.11.2
+    command: ["run", "-config", "/etc/spire/server.conf"]
+    environment: [SSL_CERT_FILE=/etc/spire/certs/ca.crt]
+    volumes:
+      - ./generated/server-gcp.conf:/etc/spire/server.conf:ro
+      - ./certs/spire-gcp-server.crt:/etc/spire/certs/server.crt:ro
+      - ./certs/spire-gcp-server.key:/etc/spire/certs/server.key:ro
+      - ./certs/ca.crt:/etc/spire/certs/ca.crt:ro
+  spire-aws-server:
+    image: ghcr.io/spiffe/spire-server:1.11.2
+    command: ["run", "-config", "/etc/spire/server.conf"]
+    environment: [SSL_CERT_FILE=/etc/spire/certs/ca.crt]
+    volumes:
+      - ./generated/server-aws.conf:/etc/spire/server.conf:ro
+      - ./certs/spire-aws-server.crt:/etc/spire/certs/server.crt:ro
+      - ./certs/spire-aws-server.key:/etc/spire/certs/server.key:ro
+      - ./certs/ca.crt:/etc/spire/certs/ca.crt:ro
+  spire-gcp-agent:
+    image: ghcr.io/spiffe/spire-agent:1.11.2
+    entrypoint: ["sleep", "infinity"]
+    environment: [SSL_CERT_FILE=/etc/spire/certs/ca.crt]
+    volumes:
+      - ./generated/agent-gcp.conf:/etc/spire/agent.conf:ro
+      - ./certs/ca.crt:/etc/spire/certs/ca.crt:ro
+  spire-aws-agent:
+    image: ghcr.io/spiffe/spire-agent:1.11.2
+    entrypoint: ["sleep", "infinity"]
+    environment: [SSL_CERT_FILE=/etc/spire/certs/ca.crt]
+    volumes:
+      - ./generated/agent-aws.conf:/etc/spire/agent.conf:ro
+      - ./certs/ca.crt:/etc/spire/certs/ca.crt:ro
+  forge-serve:
+    image: alpine
+    command: ["/usr/local/bin/forge", "serve"]
+    ports: ["8080:8080"]
+    environment:
+      - SSL_CERT_FILE=/etc/spire/certs/ca.crt
+      - FORGE_LOCAL_TRUST_DOMAIN=forge.aws.local
+      - FORGE_REMOTE_TRUST_DOMAIN=forge.gcp.local
+      - FORGE_BUNDLE_ENDPOINT_URL=https://spire-gcp-server:8443
+      - FORGE_LISTEN_ADDR=:8080
+    volumes:
+      - ./generated/forge:/usr/local/bin/forge:ro
+      - ./certs/ca.crt:/etc/spire/certs/ca.crt:ro

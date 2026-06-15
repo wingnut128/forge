@@ -50,11 +50,13 @@ func run(outDir string) error {
 		"agent-gcp.conf": func() (string, error) {
 			return spire.RenderAgentHCL(spire.AgentConfig{
 				TrustDomain: gcpTD, ServerAddress: "spire-gcp-server",
+				InsecureBootstrap: true, // local demo; Phase 2 pins a trust bundle
 			})
 		},
 		"agent-aws.conf": func() (string, error) {
 			return spire.RenderAgentHCL(spire.AgentConfig{
 				TrustDomain: awsTD, ServerAddress: "spire-aws-server",
+				InsecureBootstrap: true, // local demo; Phase 2 pins a trust bundle
 			})
 		},
 	}

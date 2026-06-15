@@ -5,6 +5,7 @@ agent {
     server_address = "spire-gcp-server"
     server_port = "8081"
     socket_path = "/tmp/agent.sock"
+    insecure_bootstrap = false
 }
 
 plugins {

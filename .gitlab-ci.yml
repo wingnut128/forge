@@ -59,15 +59,12 @@ semgrep:
   stage: security
   image: semgrep/semgrep@sha256:bd2ada83c7aa5a60e07d86ee84ba0c12282264781c8d783be5a912549a94394f
   script:
-    - semgrep ci
+    - semgrep --config=auto
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_PIPELINE_SOURCE == 'schedule'
-  variables:
-    SEMGREP_APP_TOKEN:
-      description: Semgrep app token — set in project CI/CD variables if using Semgrep Cloud Platform
 
 sast:
   allow_failure: true

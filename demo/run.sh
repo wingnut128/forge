@@ -28,17 +28,23 @@ CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" \
   go build -o demo/generated/forge ./cmd/forge
 
 # RUN = runtime's detached-run command; EXEC = runtime's exec command.
+# CLI = the runtime binary, used for network/rm housekeeping below.
 if [ "$RT" = "docker" ]; then
-  RUN="docker run"
-  export EXEC="docker exec"
-  docker network rm "$NET" >/dev/null 2>&1 || true
-  docker network create "$NET" >/dev/null
+  CLI=docker
 else
-  RUN="container run"
-  export EXEC="container exec"
-  container network rm "$NET" >/dev/null 2>&1 || true
-  container network create "$NET"
+  CLI=container
 fi
+RUN="$CLI run"
+export EXEC="$CLI exec"
+
+# Force-remove any containers left attached to the network by a prior run, or
+# the "network already exists" create below fails because rm can't drop a
+# network with live members. Keeps re-runs idempotent without `make demo-clean`.
+for c in spire-gcp-server spire-aws-server spire-gcp-agent forge-serve; do
+  $CLI rm -f "$c" >/dev/null 2>&1 || true
+done
+$CLI network rm "$NET" >/dev/null 2>&1 || true
+$CLI network create "$NET" >/dev/null
 echo "==> network $NET ready ($RT runtime)"
 
 # The SPIRE images' ENTRYPOINT is ["/opt/spire/bin/spire-<role>", "run"], so the

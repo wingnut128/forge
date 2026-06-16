@@ -183,8 +183,8 @@ func TestDeployFunc_EnableGKEAndEKS(t *testing.T) {
 
 func TestDeployFunc_DefaultStackName(t *testing.T) {
 	old := os.Getenv("FORGE_STACK")
-	os.Unsetenv("FORGE_STACK")
-	defer os.Setenv("FORGE_STACK", old)
+	_ = os.Unsetenv("FORGE_STACK")
+	defer func() { _ = os.Setenv("FORGE_STACK", old) }()
 
 	stackName := os.Getenv("FORGE_STACK")
 	if stackName == "" {

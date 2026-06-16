@@ -60,7 +60,7 @@ func (r *BundleRefresher) fetch(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("fetching bundle: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("bundle endpoint returned HTTP %d", resp.StatusCode)
 	}

@@ -28,7 +28,7 @@ go-vet:
 
 golangci-lint:
   stage: lint
-  image: golangci/golangci-lint:v2.1@sha256:d3d3d8252222e75bfd38038286b37791916717c3ea499ecaeaa62e92f3e75aa7
+  image: golangci/golangci-lint:v2.12.2@sha256:6ffe652d2215f590fcf6c6edcda8959c7a765a09378c200d31e098f7516f16c9
   script:
     - golangci-lint run --timeout=5m ./...
   allow_failure: true

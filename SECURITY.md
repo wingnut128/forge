@@ -3,7 +3,7 @@
 ## Reporting a Vulnerability
 
 Please report security vulnerabilities privately by opening a
-[security advisory](https://gitlab.com/cloudreaper/forge/security/advisories/new).
+[security advisory](https://github.com/wingnut128/forge/security/advisories/new).
 
 Do **not** open a public issue for security reports.
 

@@ -23,7 +23,7 @@ go-vet:
 
 golangci-lint:
   stage: lint
-  image: golangci/golangci-lint:v2.1
+  image: golangci/golangci-lint:v2.1@sha256:d3d3d8252222e75bfd38038286b37791916717c3ea499ecaeaa62e92f3e75aa7
   script:
     - golangci-lint run --timeout=5m ./...
   allow_failure: true
@@ -54,7 +54,7 @@ test:
 
 semgrep:
   stage: security
-  image: semgrep/semgrep
+  image: semgrep/semgrep@sha256:bd2ada83c7aa5a60e07d86ee84ba0c12282264781c8d783be5a912549a94394f
   script:
     - semgrep ci
   allow_failure: true
@@ -64,7 +64,7 @@ semgrep:
     - if: $CI_PIPELINE_SOURCE == 'schedule'
   variables:
     SEMGREP_APP_TOKEN:
-      description: Semgrep app token for CI authentication
+      description: Semgrep app token — set in project CI/CD variables if using Semgrep Cloud Platform
 
 sast:
   stage: security
@@ -80,15 +80,10 @@ sast:
 
 release:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
   script:
-    - apk add git
     - |
-      cat > release-notes.md <<-EOF
-      ## Changes since previous release
-
-      $(git log "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD" --pretty=format:"- %s" --no-merges)
-      EOF
+      git log "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)..HEAD" \
+        --pretty=format:"- %s" --no-merges > release-notes.md
   release:
     name: $CI_COMMIT_TAG
     description: release-notes.md

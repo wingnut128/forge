@@ -1,7 +1,8 @@
 # forge
 
-[![Go Report Card](https://goreportcard.com/badge/gitlab.com/cloudreaper/forge)](https://goreportcard.com/report/gitlab.com/cloudreaper/forge)
-[![codecov](https://codecov.io/gl/cloudreaper/forge/branch/main/graph/badge.svg)](https://codecov.io/gl/cloudreaper/forge)
+[![CI](https://github.com/wingnut128/forge/actions/workflows/ci.yml/badge.svg)](https://github.com/wingnut128/forge/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/wingnut128/forge/actions/workflows/codeql.yml/badge.svg)](https://github.com/wingnut128/forge/actions/workflows/codeql.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/wingnut128/forge)](https://goreportcard.com/report/github.com/wingnut128/forge)
 
 Cross-cloud workload attestation platform built with Pulumi (Go) and SPIFFE/SPIRE.
 

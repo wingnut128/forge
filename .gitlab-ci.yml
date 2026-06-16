@@ -1,5 +1,5 @@
 ---
-image: cgr.dev/chainguard/go:1.25
+image: cgr.dev/chainguard/go:latest
 
 include:
   - template: Security/SAST.gitlab-ci.yml

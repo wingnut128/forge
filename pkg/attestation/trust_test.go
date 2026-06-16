@@ -6,14 +6,12 @@ import (
 
 func TestNewFederationPair_CrossCloud(t *testing.T) {
 	gcp := TrustDomain{
-		Name:             "forge.dev.gcp.example.com",
-		Cloud:            "gcp",
-		OIDCDiscoveryURL: "https://oidc-discovery.forge.dev.gcp.example.com",
+		Name:  "forge.dev.gcp.example.com",
+		Cloud: "gcp",
 	}
 	aws := TrustDomain{
-		Name:             "forge.dev.aws.example.com",
-		Cloud:            "aws",
-		OIDCDiscoveryURL: "https://oidc-discovery.forge.dev.aws.example.com",
+		Name:  "forge.dev.aws.example.com",
+		Cloud: "aws",
 	}
 
 	pair, err := NewFederationPair(gcp, aws)
@@ -43,26 +41,19 @@ func TestNewFederationPair_SameCloudReturnsError(t *testing.T) {
 
 func TestNewFederationPair_PreservesFields(t *testing.T) {
 	local := TrustDomain{
-		Name:              "forge.dev.gcp.example.com",
-		Cloud:             "gcp",
-		OIDCDiscoveryURL:  "https://oidc.gcp.example.com",
-		BundleEndpointURL: "https://bundle.gcp.example.com",
+		Name:  "forge.dev.gcp.example.com",
+		Cloud: "gcp",
 	}
 	remote := TrustDomain{
-		Name:              "forge.dev.aws.example.com",
-		Cloud:             "aws",
-		OIDCDiscoveryURL:  "https://oidc.aws.example.com",
-		BundleEndpointURL: "https://bundle.aws.example.com",
+		Name:  "forge.dev.aws.example.com",
+		Cloud: "aws",
 	}
 
 	pair, err := NewFederationPair(local, remote)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if pair.Local.BundleEndpointURL != local.BundleEndpointURL {
-		t.Errorf("local BundleEndpointURL = %q, want %q", pair.Local.BundleEndpointURL, local.BundleEndpointURL)
-	}
-	if pair.Remote.OIDCDiscoveryURL != remote.OIDCDiscoveryURL {
-		t.Errorf("remote OIDCDiscoveryURL = %q, want %q", pair.Remote.OIDCDiscoveryURL, remote.OIDCDiscoveryURL)
+	if pair.Local.Cloud != local.Cloud {
+		t.Errorf("local cloud = %q, want %q", pair.Local.Cloud, local.Cloud)
 	}
 }

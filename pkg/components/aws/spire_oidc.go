@@ -12,7 +12,6 @@ type SPIREOIDCProviderArgs struct {
 	Environment         string
 	SPIRETrustDomain    string // AWS-side SPIRE trust domain
 	GCPSPIRETrustDomain string // GCP-side SPIRE trust domain (for audience)
-	EKSClusterName      pulumi.StringOutput
 }
 
 // SPIREOIDCProvider configures an IAM OIDC identity provider that accepts
@@ -27,6 +26,9 @@ type SPIREOIDCProvider struct {
 
 // NewSPIREOIDCProvider creates the IAM OIDC provider for GCP SPIRE federation.
 func NewSPIREOIDCProvider(ctx *pulumi.Context, name string, args *SPIREOIDCProviderArgs, opts ...pulumi.ResourceOption) (*SPIREOIDCProvider, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	component := &SPIREOIDCProvider{}
 	err := ctx.RegisterComponentResource("forge:aws:SPIREOIDCProvider", name, component, opts...)
 	if err != nil {

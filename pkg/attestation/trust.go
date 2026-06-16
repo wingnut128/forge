@@ -11,13 +11,6 @@ type TrustDomain struct {
 
 	// Cloud identifies the cloud provider ("gcp", "aws")
 	Cloud string
-
-	// OIDCDiscoveryURL is the endpoint serving the JWKS for this trust domain's SPIRE server.
-	OIDCDiscoveryURL string
-
-	// BundleEndpointURL is the SPIFFE Bundle Endpoint (RFC 9409) URL for trust bundle exchange.
-	// This is the preferred federation mechanism over OIDC when both SPIRE servers support it.
-	BundleEndpointURL string
 }
 
 // FederationPair defines a bidirectional trust relationship between two SPIFFE trust domains.

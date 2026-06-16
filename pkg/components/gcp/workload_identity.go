@@ -9,10 +9,10 @@ import (
 
 // WorkloadIdentityArgs configures cross-cloud workload identity federation.
 type WorkloadIdentityArgs struct {
-	Environment      string
-	SPIRETrustDomain string // GCP-side SPIRE trust domain
-	AWSSTrustDomain  string // AWS-side SPIRE trust domain for federation
-	GKEClusterName   pulumi.StringOutput
+	Environment       string
+	SPIRETrustDomain  string // GCP-side SPIRE trust domain
+	AWSSPIRETrustDomain string // AWS-side SPIRE trust domain for federation
+	GKEClusterName    pulumi.StringOutput
 }
 
 // WorkloadIdentity is a component resource that configures GCP Workload
@@ -27,6 +27,9 @@ type WorkloadIdentity struct {
 
 // NewWorkloadIdentity creates the WIF pool and OIDC provider for SPIFFE federation.
 func NewWorkloadIdentity(ctx *pulumi.Context, name string, args *WorkloadIdentityArgs, opts ...pulumi.ResourceOption) (*WorkloadIdentity, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	component := &WorkloadIdentity{}
 	err := ctx.RegisterComponentResource("forge:gcp:WorkloadIdentity", name, component, opts...)
 	if err != nil {
@@ -51,12 +54,12 @@ func NewWorkloadIdentity(ctx *pulumi.Context, name string, args *WorkloadIdentit
 	//
 	// In production, the issuer URI points to the SPIRE OIDC Discovery Provider
 	// running in the AWS cluster (e.g., https://oidc-discovery.forge.dev.aws.example.com).
-	awsIssuerURI := fmt.Sprintf("https://oidc-discovery.%s", args.AWSSTrustDomain)
+	awsIssuerURI := fmt.Sprintf("https://oidc-discovery.%s", args.AWSSPIRETrustDomain)
 
 	provider, err := iam.NewWorkloadIdentityPoolProvider(ctx, namePrefix+"-spiffe-aws", &iam.WorkloadIdentityPoolProviderArgs{
 		WorkloadIdentityPoolId:         pool.WorkloadIdentityPoolId,
 		WorkloadIdentityPoolProviderId: pulumi.String(namePrefix + "-spiffe-aws"),
-		DisplayName:                    pulumi.Sprintf("AWS SPIRE Trust Domain (%s)", args.AWSSTrustDomain),
+		DisplayName:                    pulumi.Sprintf("AWS SPIRE Trust Domain (%s)", args.AWSSPIRETrustDomain),
 
 		// OIDC federation with the AWS SPIRE OIDC Discovery Provider
 		Oidc: &iam.WorkloadIdentityPoolProviderOidcArgs{
@@ -78,7 +81,7 @@ func NewWorkloadIdentity(ctx *pulumi.Context, name string, args *WorkloadIdentit
 		// Attribute condition — only accept SVIDs from the expected trust domain
 		AttributeCondition: pulumi.Sprintf(
 			"assertion.sub.startsWith('spiffe://%s/')",
-			args.AWSSTrustDomain,
+			args.AWSSPIRETrustDomain,
 		),
 	}, parentOpt)
 	if err != nil {

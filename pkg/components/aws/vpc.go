@@ -23,16 +23,18 @@ type VPCArgs struct {
 type VPC struct {
 	pulumi.ResourceState
 
-	ID                pulumi.IDOutput
-	SubnetIDs         pulumi.StringArrayOutput
-	PublicSubnetIDs   pulumi.StringArrayOutput
-	InternalSGID      pulumi.IDOutput
-	AvailabilityZones []string
+	ID              pulumi.IDOutput
+	SubnetIDs       pulumi.StringArrayOutput
+	PublicSubnetIDs pulumi.StringArrayOutput
+	InternalSGID    pulumi.IDOutput
 }
 
 // NewVPC creates the VPC, subnets, IGW, NAT gateways, route tables, and security group.
 func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.ResourceOption) (*VPC, error) {
-	component := &VPC{AvailabilityZones: []string{args.Region + "a", args.Region + "b"}}
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
+	component := &VPC{}
 	err := ctx.RegisterComponentResource("forge:aws:VPC", name, component, opts...)
 	if err != nil {
 		return nil, err

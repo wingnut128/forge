@@ -101,7 +101,6 @@ func TestNewSPIREOIDCProvider_CreatesResources(t *testing.T) {
 			Environment:         "dev",
 			SPIRETrustDomain:    "forge.dev.aws.example.com",
 			GCPSPIRETrustDomain: "forge.dev.gcp.example.com",
-			EKSClusterName:      pulumi.String("fake-cluster").ToStringOutput(),
 		})
 		if err != nil {
 			return err

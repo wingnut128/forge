@@ -79,6 +79,44 @@ func deployFunc(ctx *pulumi.Context) error {
 		return fmt.Errorf("config: %w", err)
 	}
 
+	if err := policyCheckPhase(ctx, cfg); err != nil {
+		return err
+	}
+
+	network, err := gcpFoundationPhase(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	awsVPC, err := awsFoundationPhase(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	if err := optionalGKEDomainPhase(ctx, cfg, network); err != nil {
+		return err
+	}
+
+	if err := optionalEKSDomainPhase(ctx, cfg, awsVPC); err != nil {
+		return err
+	}
+
+	if err := optionalManagedStatePhase(ctx, cfg, awsVPC); err != nil {
+		return err
+	}
+
+	if err := spireServerPhase(ctx, cfg, network, awsVPC); err != nil {
+		return err
+	}
+
+	if err := bowtieControllerPhase(ctx, cfg, network, awsVPC); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func policyCheckPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig) error {
 	result := &policies.Result{}
 
 	policies.CheckNetwork(policies.NetworkPolicyInput{
@@ -148,96 +186,109 @@ func deployFunc(ctx *pulumi.Context) error {
 		}
 		return err
 	}
+	return nil
+}
 
-	// --- GCP foundation ---
+func gcpFoundationPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig) (*gcp.Network, error) {
 	network, err := gcp.NewNetwork(ctx, "forge-network", &gcp.NetworkArgs{
 		Environment: cfg.Environment,
 		Region:      cfg.GCPRegion,
 	})
 	if err != nil {
-		return fmt.Errorf("network: %w", err)
+		return nil, fmt.Errorf("network: %w", err)
 	}
+	return network, nil
+}
 
-	// --- AWS foundation ---
+func awsFoundationPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig) (*awscomp.VPC, error) {
 	awsVPC, err := awscomp.NewVPC(ctx, "forge-aws-vpc", &awscomp.VPCArgs{
 		Environment: cfg.Environment,
 		Region:      cfg.AWSRegion,
 		MultiAZNAT:  cfg.EnableMultiAZNAT,
 	})
 	if err != nil {
-		return fmt.Errorf("aws vpc: %w", err)
+		return nil, fmt.Errorf("aws vpc: %w", err)
+	}
+	return awsVPC, nil
+}
+
+func optionalGKEDomainPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, network *gcp.Network) error {
+	if !cfg.EnableGKE {
+		return nil
+	}
+	cluster, err := gcp.NewGKECluster(ctx, "forge-gke", &gcp.GKEClusterArgs{
+		Environment: cfg.Environment,
+		NetworkID:   network.ID,
+		SubnetID:    network.SubnetID,
+		NodeCount:   cfg.GKENodeCount,
+		MachineType: cfg.GKEMachineType,
+	})
+	if err != nil {
+		return fmt.Errorf("gke: %w", err)
 	}
 
-	// --- Optional GKE/EKS tracks ---
-	if cfg.EnableGKE {
-		cluster, err := gcp.NewGKECluster(ctx, "forge-gke", &gcp.GKEClusterArgs{
-			Environment: cfg.Environment,
-			NetworkID:   network.ID,
-			SubnetID:    network.SubnetID,
-			NodeCount:   cfg.GKENodeCount,
-			MachineType: cfg.GKEMachineType,
-		})
-		if err != nil {
-			return fmt.Errorf("gke: %w", err)
-		}
+	if _, err = gcp.NewWorkloadIdentity(ctx, "forge-wif", &gcp.WorkloadIdentityArgs{
+		Environment:        cfg.Environment,
+		SPIRETrustDomain:   cfg.SPIRETrustDomain,
+		AWSSPIRETrustDomain: cfg.AWSSPIRETrustDomain,
+		GKEClusterName:     cluster.Name,
+	}); err != nil {
+		return fmt.Errorf("workload identity: %w", err)
+	}
+	return nil
+}
 
-		if _, err = gcp.NewWorkloadIdentity(ctx, "forge-wif", &gcp.WorkloadIdentityArgs{
-			Environment:      cfg.Environment,
-			SPIRETrustDomain: cfg.SPIRETrustDomain,
-			AWSSTrustDomain:  cfg.AWSSPIRETrustDomain,
-			GKEClusterName:   cluster.Name,
-		}); err != nil {
-			return fmt.Errorf("workload identity: %w", err)
-		}
+func optionalEKSDomainPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, awsVPC *awscomp.VPC) error {
+	if !cfg.EnableEKS {
+		return nil
+	}
+	_, err := awscomp.NewEKSCluster(ctx, "forge-aws-eks", &awscomp.EKSClusterArgs{
+		Environment:  cfg.Environment,
+		VpcID:        awsVPC.ID,
+		SubnetIDs:    awsVPC.SubnetIDs,
+		NodeCount:    cfg.EKSNodeCount,
+		InstanceType: cfg.EKSInstanceType,
+	})
+	if err != nil {
+		return fmt.Errorf("aws eks: %w", err)
 	}
 
-	if cfg.EnableEKS {
-		eksCluster, err := awscomp.NewEKSCluster(ctx, "forge-aws-eks", &awscomp.EKSClusterArgs{
-			Environment:  cfg.Environment,
-			VpcID:        awsVPC.ID,
-			SubnetIDs:    awsVPC.SubnetIDs,
-			NodeCount:    cfg.EKSNodeCount,
-			InstanceType: cfg.EKSInstanceType,
-		})
-		if err != nil {
-			return fmt.Errorf("aws eks: %w", err)
-		}
+	if _, err = awscomp.NewSPIREOIDCProvider(ctx, "forge-aws-spire-oidc", &awscomp.SPIREOIDCProviderArgs{
+		Environment:         cfg.Environment,
+		SPIRETrustDomain:    cfg.AWSSPIRETrustDomain,
+		GCPSPIRETrustDomain: cfg.SPIRETrustDomain,
+	}); err != nil {
+		return fmt.Errorf("aws spire oidc: %w", err)
+	}
+	return nil
+}
 
-		if _, err = awscomp.NewSPIREOIDCProvider(ctx, "forge-aws-spire-oidc", &awscomp.SPIREOIDCProviderArgs{
-			Environment:         cfg.Environment,
-			SPIRETrustDomain:    cfg.AWSSPIRETrustDomain,
-			GCPSPIRETrustDomain: cfg.SPIRETrustDomain,
-			EKSClusterName:      eksCluster.Name,
-		}); err != nil {
-			return fmt.Errorf("aws spire oidc: %w", err)
-		}
+func optionalManagedStatePhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, awsVPC *awscomp.VPC) error {
+	if !cfg.EnableManagedState {
+		return nil
+	}
+	if _, err := gcp.NewManagedState(ctx, "forge-gcp-managed-state", &gcp.ManagedStateArgs{
+		Environment: cfg.Environment,
+		Region:      cfg.GCPRegion,
+	}); err != nil {
+		return fmt.Errorf("gcp managed-state: %w", err)
 	}
 
-	// --- Managed-state track (optional) ---
-	if cfg.EnableManagedState {
-		if _, err := gcp.NewManagedState(ctx, "forge-gcp-managed-state", &gcp.ManagedStateArgs{
-			Environment: cfg.Environment,
-			Region:      cfg.GCPRegion,
-		}); err != nil {
-			return fmt.Errorf("gcp managed-state: %w", err)
-		}
+	pc := pulumiconfig.New(ctx, "forge")
+	dbPassword := pc.RequireSecret("spire-db-password")
 
-		pc := pulumiconfig.New(ctx, "forge")
-		dbPassword := pc.RequireSecret("spire-db-password")
-
-		// First private subnet is AZ a; pass both via awsVPC.SubnetIDs.
-		if _, err := awscomp.NewManagedState(ctx, "forge-aws-managed-state", &awscomp.ManagedStateArgs{
-			Environment:      cfg.Environment,
-			VPCID:            awsVPC.ID,
-			PrivateSubnetIDs: awsVPC.SubnetIDs,
-			InternalSGID:     awsVPC.InternalSGID,
-			DBPassword:       dbPassword,
-		}); err != nil {
-			return fmt.Errorf("aws managed-state: %w", err)
-		}
+	if _, err := awscomp.NewManagedState(ctx, "forge-aws-managed-state", &awscomp.ManagedStateArgs{
+		Environment:      cfg.Environment,
+		PrivateSubnetIDs: awsVPC.SubnetIDs,
+		InternalSGID:     awsVPC.InternalSGID,
+		DBPassword:       dbPassword,
+	}); err != nil {
+		return fmt.Errorf("aws managed-state: %w", err)
 	}
+	return nil
+}
 
-	// --- SPIRE servers on cheap VMs ---
+func spireServerPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, network *gcp.Network, awsVPC *awscomp.VPC) error {
 	if _, err := gcp.NewSPIREServer(ctx, "forge-gcp-spire-server", &gcp.SPIREServerArgs{
 		Environment:      cfg.Environment,
 		Region:           cfg.GCPRegion,
@@ -251,14 +302,11 @@ func deployFunc(ctx *pulumi.Context) error {
 		return fmt.Errorf("gcp spire server: %w", err)
 	}
 
-	// AWS SPIRE server: needs an AMI. Resolve one if bowtie-aws-ami was provided,
-	// otherwise expect operator to set `forge:spire-aws-ami` (Amazon Linux 2023).
 	awsAMI := pulumiconfig.New(ctx, "forge").Get("spire-aws-ami")
 	if awsAMI == "" {
 		return fmt.Errorf("config forge:spire-aws-ami is required (e.g. Amazon Linux 2023 AMI for %s)", cfg.AWSRegion)
 	}
 
-	// Read first subnet index — SPIRE server sits in AZ a.
 	firstSubnet := awsVPC.SubnetIDs.ApplyT(func(ids []string) string {
 		if len(ids) == 0 {
 			return ""
@@ -280,8 +328,10 @@ func deployFunc(ctx *pulumi.Context) error {
 	}); err != nil {
 		return fmt.Errorf("aws spire server: %w", err)
 	}
+	return nil
+}
 
-	// --- Bowtie controllers ---
+func bowtieControllerPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, network *gcp.Network, awsVPC *awscomp.VPC) error {
 	if _, err := gcp.NewBowtieController(ctx, "forge-gcp-bowtie", &gcp.BowtieControllerArgs{
 		Environment:    cfg.Environment,
 		Region:         cfg.GCPRegion,
@@ -310,7 +360,6 @@ func deployFunc(ctx *pulumi.Context) error {
 	}); err != nil {
 		return fmt.Errorf("aws bowtie: %w", err)
 	}
-
 	return nil
 }
 
@@ -358,7 +407,10 @@ func runServe() error {
 		fmt.Printf("loaded Cedar policies from %s\n", policyDir)
 	}
 
-	srv := orchestration.NewServer(pair, refresher, listenAddr, authorizer)
+	srv, err := orchestration.NewServer(pair, refresher, listenAddr, authorizer)
+	if err != nil {
+		return fmt.Errorf("creating server: %w", err)
+	}
 	fmt.Printf("forge serve listening on %s\n", listenAddr)
 	return srv.Start(ctx)
 }

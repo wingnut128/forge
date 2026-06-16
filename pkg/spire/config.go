@@ -102,22 +102,22 @@ plugins {
 // RenderServerHCL renders a federation-aware SPIRE server.conf.
 func RenderServerHCL(cfg ServerConfig) (string, error) {
 	if cfg.TrustDomain == "" {
-		return "", fmt.Errorf("spire: TrustDomain is required")
+		return "", fmt.Errorf("TrustDomain is required")
 	}
 	if cfg.PeerTrustDomain == "" {
-		return "", fmt.Errorf("spire: PeerTrustDomain is required")
+		return "", fmt.Errorf("PeerTrustDomain is required")
 	}
 	if cfg.PeerBundleEndpointURL == "" {
-		return "", fmt.Errorf("spire: PeerBundleEndpointURL is required")
+		return "", fmt.Errorf("PeerBundleEndpointURL is required")
 	}
 	applyServerDefaults(&cfg)
 
 	port, portErr := strconv.Atoi(cfg.BundleEndpointPort)
 	if portErr != nil {
-		return "", fmt.Errorf("spire: BundleEndpointPort %q is not a valid port: %w", cfg.BundleEndpointPort, portErr)
+		return "", fmt.Errorf("BundleEndpointPort %q is not a valid port: %w", cfg.BundleEndpointPort, portErr)
 	}
 	if port <= 0 {
-		return "", fmt.Errorf("spire: BundleEndpointPort %q is not a valid port: must be positive", cfg.BundleEndpointPort)
+		return "", fmt.Errorf("BundleEndpointPort %q is not a valid port: must be positive", cfg.BundleEndpointPort)
 	}
 
 	data := serverTemplateData{ServerConfig: cfg}
@@ -127,17 +127,17 @@ func RenderServerHCL(cfg ServerConfig) (string, error) {
 		data.ConnString = cfg.DataDir + "/datastore.sqlite3"
 	case StateModeManaged:
 		if cfg.ManagedDBConnString == "" {
-			return "", fmt.Errorf("spire: ManagedDBConnString is required for managed mode")
+			return "", fmt.Errorf("ManagedDBConnString is required for managed mode")
 		}
 		data.DBType = "postgres"
 		data.ConnString = cfg.ManagedDBConnString
 	default:
-		return "", fmt.Errorf("spire: unknown StateMode %q", cfg.StateMode)
+		return "", fmt.Errorf("unknown StateMode %q", cfg.StateMode)
 	}
 
 	var sb strings.Builder
 	if err := serverTemplate.Execute(&sb, data); err != nil {
-		return "", fmt.Errorf("spire: rendering server config: %w", err)
+		return "", fmt.Errorf("rendering server config: %w", err)
 	}
 	return sb.String(), nil
 }
@@ -187,10 +187,10 @@ plugins {
 // RenderAgentHCL renders a SPIRE agent.conf using join-token node attestation.
 func RenderAgentHCL(cfg AgentConfig) (string, error) {
 	if cfg.TrustDomain == "" {
-		return "", fmt.Errorf("spire: TrustDomain is required")
+		return "", fmt.Errorf("TrustDomain is required")
 	}
 	if cfg.ServerAddress == "" {
-		return "", fmt.Errorf("spire: ServerAddress is required")
+		return "", fmt.Errorf("ServerAddress is required")
 	}
 	if cfg.ServerPort == "" {
 		cfg.ServerPort = "8081"
@@ -207,9 +207,59 @@ func RenderAgentHCL(cfg AgentConfig) (string, error) {
 
 	var sb strings.Builder
 	if err := agentTemplate.Execute(&sb, cfg); err != nil {
-		return "", fmt.Errorf("spire: rendering agent config: %w", err)
+		return "", fmt.Errorf("rendering agent config: %w", err)
 	}
 	return sb.String(), nil
+}
+
+// RenderServerStartupScript returns a bash script that formats and mounts a
+// data disk, downloads SPIRE, writes the server config, installs a systemd
+// unit, and starts the service. devicePath is the OS device path for the data
+// volume (e.g. "/dev/disk/by-id/google-spire-data" on GCP, "/dev/xvdf" on AWS).
+func RenderServerStartupScript(version, serverHCL, devicePath string) string {
+	return fmt.Sprintf(`#!/bin/bash
+set -euo pipefail
+SPIRE_VERSION=%q
+
+DEV=%s
+mkdir -p /var/lib/spire
+if ! mountpoint -q /var/lib/spire; then
+  if ! blkid "$DEV" >/dev/null 2>&1; then
+    mkfs.ext4 -F "$DEV"
+  fi
+  echo "$DEV /var/lib/spire ext4 defaults,nofail 0 2" >> /etc/fstab
+  mount /var/lib/spire
+fi
+
+if [ ! -x /usr/local/bin/spire-server ]; then
+  cd /tmp
+  curl -sSL -o spire.tar.gz "https://github.com/spiffe/spire/releases/download/v${SPIRE_VERSION}/spire-${SPIRE_VERSION}-linux-amd64-musl.tar.gz"
+  tar -xzf spire.tar.gz
+  install -m 0755 spire-${SPIRE_VERSION}/bin/spire-server /usr/local/bin/spire-server
+fi
+
+mkdir -p /etc/spire /etc/spire/certs /var/lib/spire/data
+cat >/etc/spire/server.conf <<'CONF'
+%s
+CONF
+
+cat >/etc/systemd/system/spire-server.service <<UNIT
+[Unit]
+Description=SPIRE Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/spire-server run -config /etc/spire/server.conf
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now spire-server
+`, version, devicePath, serverHCL)
 }
 
 func applyServerDefaults(cfg *ServerConfig) {

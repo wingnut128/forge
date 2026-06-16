@@ -33,6 +33,23 @@ claim the POC exists to prove.
     AND prove identity (SPIFFE) AND pass policy (Cedar)
 ```
 
+The same identity-layer flow as a sequence (renders on GitHub):
+
+```mermaid
+sequenceDiagram
+    participant W as workload<br/>(GCP)
+    participant GS as SPIRE server<br/>forge.gcp.local
+    participant AS as SPIRE server<br/>forge.aws.local
+    participant FS as forge serve<br/>(AWS)
+
+    GS-->>AS: federate trust bundles (RFC 9409)
+    Note over GS,AS: no shared secret · no cross-cloud IAM trust
+    GS->>W: mint JWT-SVID (aud=forge.aws.local)
+    W->>FS: present JWT-SVID
+    FS->>FS: verify signature + audience<br/>against federated bundle
+    FS-->>W: {"valid": true}
+```
+
 ## The problem
 
 A workload in GCP needs to call a service in AWS. The traditional answers are

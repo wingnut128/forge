@@ -1,20 +1,30 @@
 name: Dependabot auto-merge
 
-on: pull_request
+# Auto-approves and enables auto-merge for non-major Dependabot updates.
+#
+# Runs as `pull_request_target` so it executes in the base-repo context with
+# Actions secrets and write permissions available. A Dependabot `pull_request`
+# run instead gets a read-only token and only Dependabot secrets, which is why
+# this must be pull_request_target. We never check out the PR head, so untrusted
+# code is never executed; the job is gated to the dependabot[bot] actor.
+#
+# Requires Actions secret DEPENDABOT_AUTOMERGE_TOKEN: a PAT belonging to a
+# CODEOWNER, so its review satisfies require_code_owner_reviews. Re-approving on
+# every push also clears the stale-review dismissal a Dependabot rebase causes.
+# Without the secret the approve step no-ops and auto-merge waits for a manual
+# approval. Branch protection still gates the merge on the required CI checks.
+
+on: pull_request_target
 
 permissions:
-  contents: read
-  pull-requests: read
+  contents: write
+  pull-requests: write
 
 jobs:
-  auto-merge:
+  automerge:
     name: Auto-merge Dependabot PRs
+    if: ${{ github.actor == 'dependabot[bot]' }}
     runs-on: ubuntu-latest
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
-    # HAS_PAT lets the approve/merge steps no-op until the token is set, so the
-    # workflow doesn't fail on Dependabot PRs before the secret exists.
-    env:
-      HAS_PAT: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN != '' }}
     steps:
       - name: Harden the runner
         uses: step-security/harden-runner@v2
@@ -23,26 +33,16 @@ jobs:
       - name: Fetch Dependabot metadata
         id: meta
         uses: dependabot/fetch-metadata@v3
-      # Patch and minor only; major bumps stay manual. The approval uses a
-      # fine-grained PAT acting as the code owner (CODEOWNERS), which satisfies
-      # the require_code_owner_reviews gate that GITHUB_TOKEN cannot. Branch
-      # protection still gates the actual merge on the required CI checks, so a
-      # failing bump never lands.
-      - name: Approve as code owner
-        if: >-
-          env.HAS_PAT == 'true' &&
-          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-           steps.meta.outputs.update-type == 'version-update:semver-minor')
+      - name: Approve as code owner (non-major)
+        if: ${{ steps.meta.outputs.update-type != 'version-update:semver-major' }}
+        continue-on-error: true
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
         run: gh pr review --approve "$PR_URL"
+      - name: Enable auto-merge (non-major)
+        if: ${{ steps.meta.outputs.update-type != 'version-update:semver-major' }}
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
-      - name: Enable auto-merge
-        if: >-
-          env.HAS_PAT == 'true' &&
-          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-           steps.meta.outputs.update-type == 'version-update:semver-minor')
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr merge --auto --squash "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}

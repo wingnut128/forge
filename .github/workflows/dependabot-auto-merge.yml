@@ -11,10 +11,10 @@ jobs:
     name: Auto-merge Dependabot PRs
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login == 'dependabot[bot]'
-    # HAS_PAT lets the approve/merge steps no-op until DEPENDABOT_PAT is set,
-    # so the workflow doesn't fail on Dependabot PRs before the secret exists.
+    # HAS_PAT lets the approve/merge steps no-op until the token is set, so the
+    # workflow doesn't fail on Dependabot PRs before the secret exists.
     env:
-      HAS_PAT: ${{ secrets.DEPENDABOT_PAT != '' }}
+      HAS_PAT: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN != '' }}
     steps:
       - name: Harden the runner
         uses: step-security/harden-runner@v2
@@ -36,7 +36,7 @@ jobs:
         run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.DEPENDABOT_PAT }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
       - name: Enable auto-merge
         if: >-
           env.HAS_PAT == 'true' &&
@@ -45,4 +45,4 @@ jobs:
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.DEPENDABOT_PAT }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}

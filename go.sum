@@ -29,8 +29,8 @@ github.com/bazelbuild/buildtools v0.0.0-20260211083412-859bfffeef82 h1:PmoVmwzAn
 github.com/bazelbuild/buildtools v0.0.0-20260211083412-859bfffeef82/go.mod h1:PLNUetjLa77TCCziPsz0EI8a6CUxgC+1jgmWv0H25tg=
 github.com/blang/semver v3.5.1+incompatible h1:cQNTCjp13qL8KC3Nbxr/y2Bqb63oX6wdnnjpJbkM4JQ=
 github.com/blang/semver v3.5.1+incompatible/go.mod h1:kRBLl5iJ+tD4TcOOxsy/0fnwebNt5EWlYSAyrTnjyyk=
-github.com/cedar-policy/cedar-go v1.6.0 h1:5dYWkrQjza+GzdJxnzmus7Ag/2pHv4bYWe460/kDlAM=
-github.com/cedar-policy/cedar-go v1.6.0/go.mod h1:h5+3CVW1oI5LXVskJG+my9TFCYI5yjh/+Ul3EJie6MI=
+github.com/cedar-policy/cedar-go v1.8.0 h1:9gcU7EHXwHC2RMdpph68yTAkdB3behTTssC+kt4GoS8=
+github.com/cedar-policy/cedar-go v1.8.0/go.mod h1:h5+3CVW1oI5LXVskJG+my9TFCYI5yjh/+Ul3EJie6MI=
 github.com/cenkalti/backoff/v5 v5.0.3 h1:ZN+IMa753KfX5hd8vVaMixjnqRZ3y8CuJKRKj1xcsSM=
 github.com/cenkalti/backoff/v5 v5.0.3/go.mod h1:rkhZdG3JZukswDf7f0cwqPNk4K0sa+F97BxZthm/crw=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=

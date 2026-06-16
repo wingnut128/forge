@@ -16,8 +16,8 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/spiffe/go-spiffe/v2/bundle/jwtbundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
-	"github.com/wingnut128/forge/pkg/attestation"
-	"github.com/wingnut128/forge/pkg/authz"
+	"gitlab.com/cloudreaper/forge/pkg/attestation"
+	"gitlab.com/cloudreaper/forge/pkg/authz"
 )
 
 // signTestJWT creates a signed JWT with the given claims using ES256.
@@ -67,7 +67,10 @@ func testPairAndBundle(t *testing.T) (*attestation.FederationPair, *jwtbundle.Bu
 
 func TestHandleValidate_Success(t *testing.T) {
 	pair, bundle, key := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0", nil)
+	srv, err := NewServer(pair, bundle, ":0", nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	token := signTestJWT(t, key, "test-key-1", map[string]any{
 		"sub": "spiffe://remote.example.com/workload/api",
@@ -98,7 +101,10 @@ func TestHandleValidate_Success(t *testing.T) {
 
 func TestHandleValidate_InvalidToken(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0", nil)
+	srv, err := NewServer(pair, bundle, ":0", nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	body, _ := json.Marshal(validateRequest{Token: "garbage"})
 	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
@@ -120,7 +126,10 @@ func TestHandleValidate_InvalidToken(t *testing.T) {
 
 func TestHandleValidate_MissingBody(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0", nil)
+	srv, err := NewServer(pair, bundle, ":0", nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/validate", nil)
 	w := httptest.NewRecorder()
@@ -133,7 +142,10 @@ func TestHandleValidate_MissingBody(t *testing.T) {
 
 func TestHandleValidate_EmptyToken(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0", nil)
+	srv, err := NewServer(pair, bundle, ":0", nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	body, _ := json.Marshal(validateRequest{Token: ""})
 	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
@@ -147,7 +159,10 @@ func TestHandleValidate_EmptyToken(t *testing.T) {
 
 func TestHandleValidate_WrongMethod(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0", nil)
+	srv, err := NewServer(pair, bundle, ":0", nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/validate", nil)
 	w := httptest.NewRecorder()
@@ -160,7 +175,10 @@ func TestHandleValidate_WrongMethod(t *testing.T) {
 
 func TestHandleHealthz_BundleLoaded(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0", nil)
+	srv, err := NewServer(pair, bundle, ":0", nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
@@ -184,7 +202,10 @@ func (e *errorBundleSource) GetJWTBundleForTrustDomain(_ spiffeid.TrustDomain) (
 
 func TestHandleHealthz_NoBundleLoaded(t *testing.T) {
 	pair, _, _ := testPairAndBundle(t)
-	srv := NewServer(pair, &errorBundleSource{}, ":0", nil)
+	srv, err := NewServer(pair, &errorBundleSource{}, ":0", nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
@@ -197,7 +218,10 @@ func TestHandleHealthz_NoBundleLoaded(t *testing.T) {
 
 func TestServerStartAndShutdown(t *testing.T) {
 	pair, bundle, _ := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, "127.0.0.1:0", nil)
+	srv, err := NewServer(pair, bundle, "127.0.0.1:0", nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -238,7 +262,10 @@ func (s *stubAuthorizer) IsAuthorized(_, _, _ string) (authz.Decision, error) {
 func TestHandleValidate_WithAuthz_Permitted(t *testing.T) {
 	pair, bundle, key := testPairAndBundle(t)
 	az := &stubAuthorizer{decision: authz.Decision{Allowed: true, Reason: "test permit"}}
-	srv := NewServer(pair, bundle, ":0", az)
+	srv, err := NewServer(pair, bundle, ":0", az)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	token := signTestJWT(t, key, "test-key-1", map[string]any{
 		"sub": "spiffe://remote.example.com/workload/api",
@@ -267,7 +294,10 @@ func TestHandleValidate_WithAuthz_Permitted(t *testing.T) {
 func TestHandleValidate_WithAuthz_Denied(t *testing.T) {
 	pair, bundle, key := testPairAndBundle(t)
 	az := &stubAuthorizer{decision: authz.Decision{Allowed: false, Reason: "no matching permit policy"}}
-	srv := NewServer(pair, bundle, ":0", az)
+	srv, err := NewServer(pair, bundle, ":0", az)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	token := signTestJWT(t, key, "test-key-1", map[string]any{
 		"sub": "spiffe://remote.example.com/workload/api",
@@ -296,7 +326,10 @@ func TestHandleValidate_WithAuthz_Denied(t *testing.T) {
 func TestHandleValidate_AuthzSkippedWhenNoActionResource(t *testing.T) {
 	pair, bundle, key := testPairAndBundle(t)
 	az := &stubAuthorizer{decision: authz.Decision{Allowed: false, Reason: "should not be called"}}
-	srv := NewServer(pair, bundle, ":0", az)
+	srv, err := NewServer(pair, bundle, ":0", az)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	token := signTestJWT(t, key, "test-key-1", map[string]any{
 		"sub": "spiffe://remote.example.com/workload/api",
@@ -319,7 +352,10 @@ func TestHandleValidate_AuthzSkippedWhenNoActionResource(t *testing.T) {
 
 func TestHandleValidate_AuthzSkippedWhenNoAuthorizer(t *testing.T) {
 	pair, bundle, key := testPairAndBundle(t)
-	srv := NewServer(pair, bundle, ":0", nil) // nil authorizer
+	srv, err := NewServer(pair, bundle, ":0", nil) // nil authorizer
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 
 	token := signTestJWT(t, key, "test-key-1", map[string]any{
 		"sub": "spiffe://remote.example.com/workload/api",

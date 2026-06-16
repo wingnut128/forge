@@ -8,6 +8,20 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
+func defaultString(val, def string) string {
+	if val == "" {
+		return def
+	}
+	return val
+}
+
+func defaultInt(val, def int) int {
+	if val <= 0 {
+		return def
+	}
+	return val
+}
+
 // validEnvironment matches lowercase alphanumeric names with optional hyphens (no leading/trailing).
 var validEnvironment = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$`)
 
@@ -80,8 +94,11 @@ func Load(ctx *pulumi.Context) (*ForgeConfig, error) {
 	cfg := config.New(ctx, "forge")
 
 	var adminCIDRs []string
-	// GetObject returns nil if the key is unset; ignore its error for optional keys.
-	_ = cfg.GetObject("bowtie-admin-cidrs", &adminCIDRs)
+	if err := cfg.GetObject("bowtie-admin-cidrs", &adminCIDRs); err != nil {
+		// GetObject errors when the key is both present and malformed (not a JSON array).
+		// An unset key returns nil without error — we leave the empty slice.
+		return nil, fmt.Errorf("bowtie-admin-cidrs: %w", err)
+	}
 
 	return NewForgeConfig(ConfigInput{
 		Environment:         cfg.Require("environment"),
@@ -124,34 +141,13 @@ func NewForgeConfig(in ConfigInput) (*ForgeConfig, error) {
 		}
 	}
 
-	gkeNodeCount := in.GKENodeCount
-	if gkeNodeCount <= 0 {
-		gkeNodeCount = DefaultGKENodeCount
-	}
-	gkeMachineType := in.GKEMachineType
-	if gkeMachineType == "" {
-		gkeMachineType = DefaultGKEMachineType
-	}
-	eksNodeCount := in.EKSNodeCount
-	if eksNodeCount <= 0 {
-		eksNodeCount = DefaultEKSNodeCount
-	}
-	eksInstanceType := in.EKSInstanceType
-	if eksInstanceType == "" {
-		eksInstanceType = DefaultEKSInstanceType
-	}
-	gcpRegion := in.GCPRegion
-	if gcpRegion == "" {
-		gcpRegion = DefaultGCPRegion
-	}
-	awsRegion := in.AWSRegion
-	if awsRegion == "" {
-		awsRegion = DefaultAWSRegion
-	}
-	spireVersion := in.SPIREServerVersion
-	if spireVersion == "" {
-		spireVersion = DefaultSPIREServerVersion
-	}
+	gkeNodeCount := defaultInt(in.GKENodeCount, DefaultGKENodeCount)
+	gkeMachineType := defaultString(in.GKEMachineType, DefaultGKEMachineType)
+	eksNodeCount := defaultInt(in.EKSNodeCount, DefaultEKSNodeCount)
+	eksInstanceType := defaultString(in.EKSInstanceType, DefaultEKSInstanceType)
+	gcpRegion := defaultString(in.GCPRegion, DefaultGCPRegion)
+	awsRegion := defaultString(in.AWSRegion, DefaultAWSRegion)
+	spireVersion := defaultString(in.SPIREServerVersion, DefaultSPIREServerVersion)
 
 	return &ForgeConfig{
 		Environment:         in.Environment,

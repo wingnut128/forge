@@ -582,7 +582,7 @@ import (
 
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/compute"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/wingnut128/forge/pkg/spire"
+	"gitlab.com/cloudreaper/forge/pkg/spire"
 )
 ```
 
@@ -692,7 +692,7 @@ import (
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/wingnut128/forge/pkg/spire"
+	"gitlab.com/cloudreaper/forge/pkg/spire"
 )
 ```
 
@@ -795,7 +795,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wingnut128/forge/pkg/spire"
+	"gitlab.com/cloudreaper/forge/pkg/spire"
 )
 
 const (

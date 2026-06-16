@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Always update documentation before committing new features.** When adding or changing functionality, update README.md, CLAUDE.md, and TODO.md as part of the same PR — not as a follow-up. Documentation includes: code layout, commands, config keys, architecture descriptions, and planned/completed scope.
 - Follow the bisect commits rule from the global CLAUDE.md — each commit is a single logical change.
 - Run `go build ./...`, `go test ./...`, and `go vet ./...` before committing.
-- For GitHub operations, prefer the `mcp__github__*` MCP tools; fall back to the `gh` CLI only when the MCP server is unavailable or lacks the needed capability.
+- For GitLab operations, use the `glab` CLI.
 
 ## What This Is
 
@@ -101,9 +101,9 @@ The entrypoint (`main.go`) uses Pulumi's **Automation API** (`auto.UpsertStackIn
 ### Code Layout
 
 ```
-cmd/forge/              → main.go: Automation API entrypoint + serve command; test.go: test stack (AR, Cloud Run, Cloud Build)
+cmd/forge/              → main.go: Automation API entrypoint + serve command
 pkg/config/             → config.go: loads and validates ForgeConfig from Pulumi stack config
-pkg/components/gcp/     → network.go, gke.go, workload_identity.go, cloudbuild.go, cloudrun.go, artifact_registry.go,
+pkg/components/gcp/     → network.go, gke.go, workload_identity.go,
                           spire_server.go, bowtie.go, managed_state.go (GCP Pulumi components)
 pkg/components/aws/     → vpc.go, eks.go, spire_oidc.go, spire_server.go, bowtie.go, managed_state.go (AWS Pulumi components)
 pkg/attestation/        → trust.go, bundle.go, validate.go (SPIFFE federation + JWT-SVID validation)
@@ -125,7 +125,7 @@ All infrastructure components (GCP and AWS) follow Pulumi's component resource p
 
 Resource naming convention: `forge-{environment}-{resource}` (e.g., `forge-dev-vpc`).
 
-GCP URNs: `forge:gcp:Network`, `forge:gcp:GKECluster`, `forge:gcp:WorkloadIdentity`, `forge:gcp:ArtifactRegistry`, `forge:gcp:CloudRunService`, `forge:gcp:CloudBuildTrigger`, `forge:gcp:SPIREServer`, `forge:gcp:BowtieController`, `forge:gcp:ManagedState`.
+GCP URNs: `forge:gcp:Network`, `forge:gcp:GKECluster`, `forge:gcp:WorkloadIdentity`, `forge:gcp:SPIREServer`, `forge:gcp:BowtieController`, `forge:gcp:ManagedState`.
 AWS URNs: `forge:aws:VPC`, `forge:aws:EKSCluster`, `forge:aws:SPIREOIDCProvider`, `forge:aws:SPIREServer`, `forge:aws:BowtieController`, `forge:aws:ManagedState`.
 
 ### Deploy Pipeline Flow

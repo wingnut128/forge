@@ -31,6 +31,9 @@ type Network struct {
 
 // NewNetwork creates the VPC, subnets, firewall rules, Cloud Router, and Cloud NAT.
 func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pulumi.ResourceOption) (*Network, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	component := &Network{Region: args.Region}
 	err := ctx.RegisterComponentResource("forge:gcp:Network", name, component, opts...)
 	if err != nil {

@@ -12,11 +12,10 @@ import (
 
 // ManagedStateArgs configures the AWS managed-state backend.
 type ManagedStateArgs struct {
-	Environment     string
-	VPCID           pulumi.IDOutput
+	Environment      string
 	PrivateSubnetIDs pulumi.StringArrayOutput
-	InternalSGID    pulumi.IDOutput
-	DBPassword      pulumi.StringInput // expected to be a pulumi secret
+	InternalSGID     pulumi.IDOutput
+	DBPassword       pulumi.StringInput // expected to be a pulumi secret
 }
 
 // ManagedState provisions an RDS Postgres instance for the SPIRE DataStore
@@ -32,6 +31,9 @@ type ManagedState struct {
 
 // NewManagedState wires RDS + KMS + Secrets Manager for the SPIRE server.
 func NewManagedState(ctx *pulumi.Context, name string, args *ManagedStateArgs, opts ...pulumi.ResourceOption) (*ManagedState, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	component := &ManagedState{}
 	if err := ctx.RegisterComponentResource("forge:aws:ManagedState", name, component, opts...); err != nil {
 		return nil, err

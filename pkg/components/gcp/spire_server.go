@@ -5,7 +5,7 @@ import (
 
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/compute"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/wingnut128/forge/pkg/spire"
+	"gitlab.com/cloudreaper/forge/pkg/spire"
 )
 
 // SPIREServerArgs configures the GCP SPIRE server VM.
@@ -33,6 +33,9 @@ type SPIREServer struct {
 
 // NewSPIREServer provisions the VM, data disk, snapshot schedule, and firewall.
 func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opts ...pulumi.ResourceOption) (*SPIREServer, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	component := &SPIREServer{}
 	if err := ctx.RegisterComponentResource("forge:gcp:SPIREServer", name, component, opts...); err != nil {
 		return nil, err
@@ -78,7 +81,10 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 		return nil, err
 	}
 
-	startupScript := spireGCPStartupScript(args)
+	startupScript, err := spireGCPStartupScript(args)
+	if err != nil {
+		return nil, fmt.Errorf("spire server startup script: %w", err)
+	}
 
 	instance, err := compute.NewInstance(ctx, namePrefix+"-spire-server", &compute.InstanceArgs{
 		MachineType: pulumi.String(machineType),
@@ -143,14 +149,11 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 	return component, nil
 }
 
-func spireGCPStartupScript(args *SPIREServerArgs) string {
+func spireGCPStartupScript(args *SPIREServerArgs) (string, error) {
 	mode := spire.StateModeDisk
 	if args.ManagedStateMode {
 		mode = spire.StateModeManaged
 	}
-	// Phase 2 wires the real peer bundle endpoint (peer SPIRE server IP).
-	// For now derive a placeholder so config renders; live VMs are not yet
-	// exercised end-to-end (see specs/2026-06-15-spire-bootstrap-local-proof).
 	serverHCL, err := spire.RenderServerHCL(spire.ServerConfig{
 		TrustDomain:           args.TrustDomain,
 		PeerTrustDomain:       args.PeerTrustDomain,
@@ -159,52 +162,8 @@ func spireGCPStartupScript(args *SPIREServerArgs) string {
 		ManagedDBConnString:   "postgres://spire@127.0.0.1:5432/spire", // Phase 2: real managed DSN
 	})
 	if err != nil {
-		// Render only fails on missing required fields; surface as a config error
-		// baked into the script so the VM logs make the cause obvious.
-		serverHCL = "# ERROR rendering SPIRE config: " + err.Error()
+		return "", err
 	}
 
-	return fmt.Sprintf(`#!/bin/bash
-set -euo pipefail
-SPIRE_VERSION=%q
-
-mkdir -p /var/lib/spire
-if ! mountpoint -q /var/lib/spire; then
-  DEV=/dev/disk/by-id/google-spire-data
-  if ! blkid "$DEV" >/dev/null 2>&1; then
-    mkfs.ext4 -F "$DEV"
-  fi
-  echo "$DEV /var/lib/spire ext4 defaults,nofail 0 2" >> /etc/fstab
-  mount /var/lib/spire
-fi
-
-if [ ! -x /usr/local/bin/spire-server ]; then
-  cd /tmp
-  curl -sSL -o spire.tar.gz "https://github.com/spiffe/spire/releases/download/v${SPIRE_VERSION}/spire-${SPIRE_VERSION}-linux-amd64-musl.tar.gz"
-  tar -xzf spire.tar.gz
-  install -m 0755 spire-${SPIRE_VERSION}/bin/spire-server /usr/local/bin/spire-server
-fi
-
-mkdir -p /etc/spire /etc/spire/certs /var/lib/spire/data
-cat >/etc/spire/server.conf <<'CONF'
-%s
-CONF
-
-cat >/etc/systemd/system/spire-server.service <<UNIT
-[Unit]
-Description=SPIRE Server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-ExecStart=/usr/local/bin/spire-server run -config /etc/spire/server.conf
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-systemctl daemon-reload
-systemctl enable --now spire-server
-`, args.SPIREVersion, serverHCL)
+	return spire.RenderServerStartupScript(args.SPIREVersion, serverHCL, "/dev/disk/by-id/google-spire-data"), nil
 }

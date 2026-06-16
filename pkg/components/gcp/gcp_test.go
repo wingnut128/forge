@@ -100,10 +100,10 @@ func TestNewWorkloadIdentity_CreatesResources(t *testing.T) {
 	mock := &recordingMock{}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		wif, err := NewWorkloadIdentity(ctx, "test-wif", &WorkloadIdentityArgs{
-			Environment:      "dev",
-			SPIRETrustDomain: "forge.dev.gcp.example.com",
-			AWSSTrustDomain:  "forge.dev.aws.example.com",
-			GKEClusterName:   pulumi.String("fake-cluster").ToStringOutput(),
+			Environment:        "dev",
+			SPIRETrustDomain:   "forge.dev.gcp.example.com",
+			AWSSPIRETrustDomain: "forge.dev.aws.example.com",
+			GKEClusterName:     pulumi.String("fake-cluster").ToStringOutput(),
 		})
 		if err != nil {
 			return err

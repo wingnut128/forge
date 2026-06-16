@@ -30,6 +30,9 @@ type BowtieController struct {
 
 // NewBowtieController provisions the EC2 instance, EIP, and admin security group.
 func NewBowtieController(ctx *pulumi.Context, name string, args *BowtieControllerArgs, opts ...pulumi.ResourceOption) (*BowtieController, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	if args.AMI == "" {
 		return nil, fmt.Errorf("bowtie-aws-ami config is required when Bowtie is enabled")
 	}

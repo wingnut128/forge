@@ -228,10 +228,10 @@ func optionalGKEDomainPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, n
 	}
 
 	if _, err = gcp.NewWorkloadIdentity(ctx, "forge-wif", &gcp.WorkloadIdentityArgs{
-		Environment:        cfg.Environment,
-		SPIRETrustDomain:   cfg.SPIRETrustDomain,
+		Environment:         cfg.Environment,
+		SPIRETrustDomain:    cfg.SPIRETrustDomain,
 		AWSSPIRETrustDomain: cfg.AWSSPIRETrustDomain,
-		GKEClusterName:     cluster.Name,
+		GKEClusterName:      cluster.Name,
 	}); err != nil {
 		return fmt.Errorf("workload identity: %w", err)
 	}

@@ -48,8 +48,8 @@ func NewManagedState(ctx *pulumi.Context, name string, args *ManagedStateArgs, o
 				Ipv4Enabled: pulumi.Bool(true),
 			},
 			BackupConfiguration: &sql.DatabaseInstanceSettingsBackupConfigurationArgs{
-				Enabled:                     pulumi.Bool(true),
-				PointInTimeRecoveryEnabled:  pulumi.Bool(false),
+				Enabled:                    pulumi.Bool(true),
+				PointInTimeRecoveryEnabled: pulumi.Bool(false),
 			},
 		},
 	}, parentOpt)

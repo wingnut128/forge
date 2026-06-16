@@ -9,10 +9,10 @@ import (
 
 // WorkloadIdentityArgs configures cross-cloud workload identity federation.
 type WorkloadIdentityArgs struct {
-	Environment       string
-	SPIRETrustDomain  string // GCP-side SPIRE trust domain
+	Environment         string
+	SPIRETrustDomain    string // GCP-side SPIRE trust domain
 	AWSSPIRETrustDomain string // AWS-side SPIRE trust domain for federation
-	GKEClusterName    pulumi.StringOutput
+	GKEClusterName      pulumi.StringOutput
 }
 
 // WorkloadIdentity is a component resource that configures GCP Workload

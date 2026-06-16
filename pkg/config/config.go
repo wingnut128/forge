@@ -73,9 +73,9 @@ type ConfigInput struct {
 	GCPRegion           string
 	AWSRegion           string
 	GKENodeCount        int
-	GKEMachineType     string
-	EKSNodeCount       int
-	EKSInstanceType    string
+	GKEMachineType      string
+	EKSNodeCount        int
+	EKSInstanceType     string
 
 	EnableGKE          bool
 	EnableEKS          bool

@@ -72,9 +72,9 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 	}
 
 	dataDisk, err := compute.NewDisk(ctx, namePrefix+"-spire-data", &compute.DiskArgs{
-		Zone:            pulumi.String(zone),
-		Size:            pulumi.Int(20),
-		Type:            pulumi.String("pd-standard"),
+		Zone:             pulumi.String(zone),
+		Size:             pulumi.Int(20),
+		Type:             pulumi.String("pd-standard"),
 		ResourcePolicies: pulumi.StringArray{snapPolicy.ID().ToStringOutput()},
 	}, parentOpt)
 	if err != nil {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/compute"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/wingnut128/forge/pkg/spire"
+	"gitlab.com/cloudreaper/forge/pkg/spire"
 )
 
 // SPIREServerArgs configures the GCP SPIRE server VM.

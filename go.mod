@@ -1,4 +1,4 @@
-module github.com/wingnut128/forge
+module gitlab.com/cloudreaper/forge
 
 go 1.25.8
 

@@ -10,8 +10,8 @@ import (
 
 	"github.com/spiffe/go-spiffe/v2/bundle/jwtbundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
-	"github.com/wingnut128/forge/pkg/attestation"
-	"github.com/wingnut128/forge/pkg/authz"
+	"gitlab.com/cloudreaper/forge/pkg/attestation"
+	"gitlab.com/cloudreaper/forge/pkg/authz"
 )
 
 // Server is the attestation HTTP service that validates JWT-SVIDs

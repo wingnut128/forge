@@ -5,7 +5,7 @@ import (
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/wingnut128/forge/pkg/spire"
+	"gitlab.com/cloudreaper/forge/pkg/spire"
 )
 
 // SPIREServerArgs configures the AWS SPIRE server EC2 instance.

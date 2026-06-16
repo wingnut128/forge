@@ -9,6 +9,38 @@ side is cryptographically validated on the AWS side through the real
 > other with no shared secret and no cross-cloud IAM trust. See
 > [`../docs/why-this-model.md`](../docs/why-this-model.md).
 
+```
+                    what `make demo` proves
+    ===========================================================
+
+    IDENTITY LAYER  (SPIFFE / SPIRE)        <-- proven by make demo
+    +-----------------------------------------------------------+
+    |   forge.gcp.local                       forge.aws.local   |
+    |   +---------------+   federation    +---------------+      |
+    |   | SPIRE server  |<===============>| SPIRE server  |      |
+    |   +---------------+  trust bundles   +---------------+      |
+    |          | mints       (RFC 9409)           ^ verify       |
+    |          v                                  | sig + aud    |
+    |     [ workload ] ====== JWT-SVID =====> [ forge serve ]    |
+    |                     aud=forge.aws.local         |          |
+    |                                                 v          |
+    |                                       {"valid": true}      |
+    +-----------------------------------------------------------+
+       no shared secret  .  no cross-cloud IAM trust
+       identity proven by signature, not by network position
+
+    NETWORK LAYER  (Bowtie mesh)            <-- model; Phase 2
+    +-----------------------------------------------------------+
+    |     GCP  <==========  encrypted path  ==========>  AWS    |
+    +-----------------------------------------------------------+
+
+    reachability =/= trust: a workload must REACH the service
+    AND prove identity (SPIFFE) AND pass policy (Cedar)
+```
+
+(The diagram below under "What it stands up" shows the container wiring; this one
+shows what that wiring *accomplishes*.)
+
 ## Prerequisites
 
 - **Go 1.25+**

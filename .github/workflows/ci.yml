@@ -32,6 +32,12 @@ jobs:
         run: |
           go test -coverprofile=coverage.txt -covermode=atomic ./...
           go tool cover -func=coverage.txt
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   lint:
     name: Lint

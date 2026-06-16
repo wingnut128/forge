@@ -5,7 +5,7 @@ import (
 
 	"github.com/pulumi/pulumi-gcp/sdk/v8/go/gcp/compute"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"gitlab.com/cloudreaper/forge/pkg/spire"
+	"github.com/wingnut128/forge/pkg/spire"
 )
 
 // SPIREServerArgs configures the GCP SPIRE server VM.
@@ -72,9 +72,9 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 	}
 
 	dataDisk, err := compute.NewDisk(ctx, namePrefix+"-spire-data", &compute.DiskArgs{
-		Zone:            pulumi.String(zone),
-		Size:            pulumi.Int(20),
-		Type:            pulumi.String("pd-standard"),
+		Zone:             pulumi.String(zone),
+		Size:             pulumi.Int(20),
+		Type:             pulumi.String("pd-standard"),
 		ResourcePolicies: pulumi.StringArray{snapPolicy.ID().ToStringOutput()},
 	}, parentOpt)
 	if err != nil {

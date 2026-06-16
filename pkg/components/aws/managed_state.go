@@ -50,18 +50,18 @@ func NewManagedState(ctx *pulumi.Context, name string, args *ManagedStateArgs, o
 	}
 
 	db, err := rds.NewInstance(ctx, namePrefix+"-spire-db", &rds.InstanceArgs{
-		Engine:               pulumi.String("postgres"),
-		EngineVersion:        pulumi.String("15"),
-		InstanceClass:        pulumi.String("db.t4g.micro"),
-		AllocatedStorage:     pulumi.Int(20),
-		DbSubnetGroupName:    subnetGroup.Name,
-		VpcSecurityGroupIds:  pulumi.StringArray{args.InternalSGID.ToStringOutput()},
-		Username:             pulumi.String("spire"),
-		Password:             args.DBPassword,
-		DbName:               pulumi.String("spire"),
-		SkipFinalSnapshot:    pulumi.Bool(true),
-		PubliclyAccessible:   pulumi.Bool(false),
-		StorageEncrypted:     pulumi.Bool(true),
+		Engine:              pulumi.String("postgres"),
+		EngineVersion:       pulumi.String("15"),
+		InstanceClass:       pulumi.String("db.t4g.micro"),
+		AllocatedStorage:    pulumi.Int(20),
+		DbSubnetGroupName:   subnetGroup.Name,
+		VpcSecurityGroupIds: pulumi.StringArray{args.InternalSGID.ToStringOutput()},
+		Username:            pulumi.String("spire"),
+		Password:            args.DBPassword,
+		DbName:              pulumi.String("spire"),
+		SkipFinalSnapshot:   pulumi.Bool(true),
+		PubliclyAccessible:  pulumi.Bool(false),
+		StorageEncrypted:    pulumi.Bool(true),
 		Tags: pulumi.StringMap{
 			"Name":            pulumi.String(namePrefix + "-spire-db"),
 			"forge:component": pulumi.String("spire-datastore"),
@@ -85,10 +85,10 @@ func NewManagedState(ctx *pulumi.Context, name string, args *ManagedStateArgs, o
 	}
 
 	key, err := kms.NewKey(ctx, namePrefix+"-spire-key", &kms.KeyArgs{
-		Description:          pulumi.String("SPIRE server KeyManager CMK"),
-		KeyUsage:             pulumi.String("SIGN_VERIFY"),
+		Description:           pulumi.String("SPIRE server KeyManager CMK"),
+		KeyUsage:              pulumi.String("SIGN_VERIFY"),
 		CustomerMasterKeySpec: pulumi.String("ECC_NIST_P256"),
-		Tags: pulumi.StringMap{"Name": pulumi.String(namePrefix + "-spire-key")},
+		Tags:                  pulumi.StringMap{"Name": pulumi.String(namePrefix + "-spire-key")},
 	}, parentOpt)
 	if err != nil {
 		return nil, err

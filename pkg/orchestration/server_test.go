@@ -16,8 +16,8 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/spiffe/go-spiffe/v2/bundle/jwtbundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
-	"gitlab.com/cloudreaper/forge/pkg/attestation"
-	"gitlab.com/cloudreaper/forge/pkg/authz"
+	"github.com/wingnut128/forge/pkg/attestation"
+	"github.com/wingnut128/forge/pkg/authz"
 )
 
 // signTestJWT creates a signed JWT with the given claims using ES256.

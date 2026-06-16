@@ -9,13 +9,13 @@ import (
 
 // BowtieControllerArgs configures the AWS Bowtie controller EC2 instance.
 type BowtieControllerArgs struct {
-	Environment     string
-	Region          string
-	VPCID           pulumi.IDOutput
-	PublicSubnetID  pulumi.StringOutput
-	AMI             string
-	InstanceType    string // default: t3.small
-	AdminCIDRs      []string
+	Environment    string
+	Region         string
+	VPCID          pulumi.IDOutput
+	PublicSubnetID pulumi.StringOutput
+	AMI            string
+	InstanceType   string // default: t3.small
+	AdminCIDRs     []string
 }
 
 // BowtieController provisions a single Bowtie controller EC2 instance with an
@@ -113,8 +113,8 @@ func NewBowtieController(ctx *pulumi.Context, name string, args *BowtieControlle
 			VolumeType: pulumi.String("gp3"),
 		},
 		Tags: pulumi.StringMap{
-			"Name":             pulumi.String(namePrefix + "-bowtie"),
-			"forge:component":  pulumi.String("bowtie-controller"),
+			"Name":            pulumi.String(namePrefix + "-bowtie"),
+			"forge:component": pulumi.String("bowtie-controller"),
 		},
 	}, parentOpt)
 	if err != nil {

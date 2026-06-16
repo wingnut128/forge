@@ -5,7 +5,7 @@ import (
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"gitlab.com/cloudreaper/forge/pkg/spire"
+	"github.com/wingnut128/forge/pkg/spire"
 )
 
 // SPIREServerArgs configures the AWS SPIRE server EC2 instance.
@@ -14,7 +14,7 @@ type SPIREServerArgs struct {
 	Region           string
 	VPCID            pulumi.IDOutput
 	PrivateSubnetID  pulumi.StringOutput
-	InternalSGID    pulumi.IDOutput
+	InternalSGID     pulumi.IDOutput
 	AMI              string // Amazon Linux 2023 or similar
 	InstanceType     string // default: t3.small
 	SPIREVersion     string
@@ -96,14 +96,14 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 				VolumeType: pulumi.String("gp3"),
 				Encrypted:  pulumi.Bool(true),
 				Tags: pulumi.StringMap{
-					"Name":             pulumi.String(namePrefix + "-spire-data"),
-					"forge:snapshot":   pulumi.String("spire"),
+					"Name":           pulumi.String(namePrefix + "-spire-data"),
+					"forge:snapshot": pulumi.String("spire"),
 				},
 			},
 		},
 		Tags: pulumi.StringMap{
-			"Name":             pulumi.String(namePrefix + "-spire-server"),
-			"forge:component":  pulumi.String("spire-server"),
+			"Name":            pulumi.String(namePrefix + "-spire-server"),
+			"forge:component": pulumi.String("spire-server"),
 		},
 	}, parentOpt)
 	if err != nil {

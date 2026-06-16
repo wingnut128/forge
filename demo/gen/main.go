@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"gitlab.com/cloudreaper/forge/pkg/spire"
+	"github.com/wingnut128/forge/pkg/spire"
 )
 
 const (

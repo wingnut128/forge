@@ -14,13 +14,13 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 
-	"gitlab.com/cloudreaper/forge/pkg/attestation"
-	"gitlab.com/cloudreaper/forge/pkg/authz"
-	awscomp "gitlab.com/cloudreaper/forge/pkg/components/aws"
-	"gitlab.com/cloudreaper/forge/pkg/components/gcp"
-	forgeconfig "gitlab.com/cloudreaper/forge/pkg/config"
-	"gitlab.com/cloudreaper/forge/pkg/orchestration"
-	"gitlab.com/cloudreaper/forge/pkg/policies"
+	"github.com/wingnut128/forge/pkg/attestation"
+	"github.com/wingnut128/forge/pkg/authz"
+	awscomp "github.com/wingnut128/forge/pkg/components/aws"
+	"github.com/wingnut128/forge/pkg/components/gcp"
+	forgeconfig "github.com/wingnut128/forge/pkg/config"
+	"github.com/wingnut128/forge/pkg/orchestration"
+	"github.com/wingnut128/forge/pkg/policies"
 )
 
 func main() {

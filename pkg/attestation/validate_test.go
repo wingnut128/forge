@@ -46,7 +46,7 @@ func TestValidateRemoteSVID_Valid(t *testing.T) {
 
 	remoteTD := spiffeid.RequireTrustDomainFromString("remote.example.com")
 	bundle := jwtbundle.New(remoteTD)
-	bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
+	_ = bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
 
 	pair := &FederationPair{
 		Local:  TrustDomain{Name: "local.example.com", Cloud: "gcp"},
@@ -76,7 +76,7 @@ func TestValidateRemoteSVID_WrongAudience(t *testing.T) {
 
 	remoteTD := spiffeid.RequireTrustDomainFromString("remote.example.com")
 	bundle := jwtbundle.New(remoteTD)
-	bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
+	_ = bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
 
 	pair := &FederationPair{
 		Local:  TrustDomain{Name: "local.example.com", Cloud: "gcp"},
@@ -104,7 +104,7 @@ func TestValidateRemoteSVID_WrongTrustDomain(t *testing.T) {
 	// Bundle is for "attacker.example.com" but pair expects "remote.example.com"
 	attackerTD := spiffeid.RequireTrustDomainFromString("attacker.example.com")
 	bundle := jwtbundle.New(attackerTD)
-	bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
+	_ = bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
 
 	pair := &FederationPair{
 		Local:  TrustDomain{Name: "local.example.com", Cloud: "gcp"},
@@ -131,7 +131,7 @@ func TestValidateRemoteSVID_ExpiredToken(t *testing.T) {
 
 	remoteTD := spiffeid.RequireTrustDomainFromString("remote.example.com")
 	bundle := jwtbundle.New(remoteTD)
-	bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
+	_ = bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
 
 	pair := &FederationPair{
 		Local:  TrustDomain{Name: "local.example.com", Cloud: "gcp"},

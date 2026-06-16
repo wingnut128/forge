@@ -137,7 +137,7 @@ func TestCedarAuthorizer_EmptyDirectory(t *testing.T) {
 
 func TestCedarAuthorizer_InvalidPolicy(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "bad.cedar"), []byte("not valid cedar!!!"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "bad.cedar"), []byte("not valid cedar!!!"), 0644)
 	_, err := NewCedarAuthorizer(dir)
 	if err == nil {
 		t.Fatal("expected error for invalid policy")
@@ -146,14 +146,14 @@ func TestCedarAuthorizer_InvalidPolicy(t *testing.T) {
 
 func TestCedarAuthorizer_MultiplePolicyFiles(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "a.cedar"), []byte(`
+	_ = os.WriteFile(filepath.Join(dir, "a.cedar"), []byte(`
 		permit(
 			principal == SpiffeWorkload::"spiffe://remote.example.com/workload/api",
 			action == Action::"read-data",
 			resource == Resource::"pipeline-x"
 		);
 	`), 0644)
-	os.WriteFile(filepath.Join(dir, "b.cedar"), []byte(`
+	_ = os.WriteFile(filepath.Join(dir, "b.cedar"), []byte(`
 		permit(
 			principal == SpiffeWorkload::"spiffe://remote.example.com/workload/batch",
 			action == Action::"write-data",

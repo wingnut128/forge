@@ -53,7 +53,7 @@ func testPairAndBundle(t *testing.T) (*attestation.FederationPair, *jwtbundle.Bu
 	}
 	remoteTD := spiffeid.RequireTrustDomainFromString("remote.example.com")
 	bundle := jwtbundle.New(remoteTD)
-	bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
+	_ = bundle.AddJWTAuthority("test-key-1", &key.PublicKey)
 
 	pair, err := attestation.NewFederationPair(
 		attestation.TrustDomain{Name: "local.example.com", Cloud: "gcp"},
@@ -87,7 +87,7 @@ func TestHandleValidate_Success(t *testing.T) {
 		t.Fatalf("status = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 	var resp validateResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	if !resp.Valid {
 		t.Errorf("valid = false, want true")
 	}
@@ -115,7 +115,7 @@ func TestHandleValidate_InvalidToken(t *testing.T) {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
 	var resp validateResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Valid {
 		t.Error("valid = true, want false")
 	}
@@ -188,7 +188,7 @@ func TestHandleHealthz_BundleLoaded(t *testing.T) {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 	var resp healthResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Status != "ok" {
 		t.Errorf("status = %q, want %q", resp.Status, "ok")
 	}
@@ -237,7 +237,7 @@ func TestServerStartAndShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("healthz request failed: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("healthz status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
@@ -282,7 +282,7 @@ func TestHandleValidate_WithAuthz_Permitted(t *testing.T) {
 		t.Fatalf("status = %d, want %d; body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 	var resp validateResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	if !resp.Valid {
 		t.Error("valid = false, want true")
 	}
@@ -314,7 +314,7 @@ func TestHandleValidate_WithAuthz_Denied(t *testing.T) {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 	var resp validateResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Authorized == nil || *resp.Authorized {
 		t.Error("authorized should be false")
 	}
@@ -344,7 +344,7 @@ func TestHandleValidate_AuthzSkippedWhenNoActionResource(t *testing.T) {
 	srv.handleValidate(w, req)
 
 	var resp validateResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Authorized != nil {
 		t.Error("authorized should be nil when action/resource not provided")
 	}
@@ -369,7 +369,7 @@ func TestHandleValidate_AuthzSkippedWhenNoAuthorizer(t *testing.T) {
 	srv.handleValidate(w, req)
 
 	var resp validateResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	if resp.Authorized != nil {
 		t.Error("authorized should be nil when no authorizer configured")
 	}

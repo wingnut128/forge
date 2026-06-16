@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Always update documentation before committing new features.** When adding or changing functionality, update README.md, CLAUDE.md, and TODO.md as part of the same PR — not as a follow-up. Documentation includes: code layout, commands, config keys, architecture descriptions, and planned/completed scope.
 - Follow the bisect commits rule from the global CLAUDE.md — each commit is a single logical change.
-- Install git pre-commit hooks once per clone: `make hooks`. These run `gofmt`, `go vet`, and `go build` before every commit.
+- Install git pre-commit hooks once per clone: `make hooks`. The hook runs `make lint` (gofmt check, `go vet`, `golangci-lint`, `go build`) before every commit — the same gate as the CI Lint job. Linting is mandatory; commits and PRs must pass it.
 - For GitHub operations, use the `gh` CLI. CI runs on GitHub Actions (`.github/workflows/`).
 
 ## What This Is

@@ -4,13 +4,6 @@ set -e
 STASH=$(git stash --include-untracked --quiet --keep-index || echo "stash failed")
 trap '[ "$STASH" = "stash failed" ] || git stash pop --quiet' EXIT
 
-UNFORMATTED=$(gofmt -l .)
-if [ -n "$UNFORMATTED" ]; then
-  echo "go fmt needs to fix these files:"
-  echo "$UNFORMATTED"
-  echo "run: go fmt ./..."
-  exit 1
-fi
-
-go vet ./...
-go build ./...
+# Single source of truth: gofmt check, go vet, golangci-lint, and build.
+# Keep this in lockstep with the CI Lint job.
+make lint

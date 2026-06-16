@@ -1,7 +1,8 @@
 .DEFAULT_GOAL := help
-.PHONY: help build test vet lint clean preview up destroy tidy hooks demo demo-clean
+.PHONY: help build test vet fmt lint clean preview up destroy tidy hooks demo demo-clean
 
 STACK ?= dev
+GOLANGCI_VERSION ?= v2.12.2
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -15,7 +16,22 @@ test: ## Run all tests
 vet: ## Run go vet
 	go vet ./...
 
-lint: vet ## Alias for vet
+fmt: ## Format all Go code
+	go fmt ./...
+
+lint: ## Run all static checks: gofmt, go vet, golangci-lint, build
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "gofmt needs to fix these files:"; echo "$$unformatted"; \
+		echo "run: make fmt"; exit 1; \
+	fi
+	go vet ./...
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run --timeout=10m ./...; \
+	else \
+		go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION) run --timeout=10m ./...; \
+	fi
+	go build ./...
 
 clean: ## Clean build artifacts
 	go clean ./...

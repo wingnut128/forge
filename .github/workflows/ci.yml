@@ -12,6 +12,9 @@ jobs:
   build-test:
     name: Build & Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Harden the runner
         uses: step-security/harden-runner@v2
@@ -36,7 +39,7 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           files: coverage.txt
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           fail_ci_if_error: false
 
   lint:

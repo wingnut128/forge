@@ -31,6 +31,9 @@ type BowtieController struct {
 
 // NewBowtieController provisions the VM, static external IP, and admin firewall.
 func NewBowtieController(ctx *pulumi.Context, name string, args *BowtieControllerArgs, opts ...pulumi.ResourceOption) (*BowtieController, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	if args.Image == "" {
 		return nil, fmt.Errorf("bowtie-gcp-image config is required when Bowtie is enabled")
 	}

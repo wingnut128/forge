@@ -28,6 +28,9 @@ type ManagedState struct {
 
 // NewManagedState wires Cloud SQL + KMS + Secret Manager for the SPIRE server.
 func NewManagedState(ctx *pulumi.Context, name string, args *ManagedStateArgs, opts ...pulumi.ResourceOption) (*ManagedState, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	component := &ManagedState{}
 	if err := ctx.RegisterComponentResource("forge:gcp:ManagedState", name, component, opts...); err != nil {
 		return nil, err

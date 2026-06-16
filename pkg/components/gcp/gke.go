@@ -28,6 +28,9 @@ type GKECluster struct {
 
 // NewGKECluster provisions a private GKE cluster with Workload Identity enabled.
 func NewGKECluster(ctx *pulumi.Context, name string, args *GKEClusterArgs, opts ...pulumi.ResourceOption) (*GKECluster, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	component := &GKECluster{}
 	err := ctx.RegisterComponentResource("forge:gcp:GKECluster", name, component, opts...)
 	if err != nil {

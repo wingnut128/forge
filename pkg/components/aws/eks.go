@@ -28,6 +28,9 @@ type EKSCluster struct {
 
 // NewEKSCluster provisions an EKS cluster with a managed node group.
 func NewEKSCluster(ctx *pulumi.Context, name string, args *EKSClusterArgs, opts ...pulumi.ResourceOption) (*EKSCluster, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args must not be nil")
+	}
 	component := &EKSCluster{}
 	err := ctx.RegisterComponentResource("forge:aws:EKSCluster", name, component, opts...)
 	if err != nil {

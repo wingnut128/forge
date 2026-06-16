@@ -27,11 +27,18 @@ type Server struct {
 
 // NewServer creates an attestation server that validates tokens against the
 // given federation pair and bundle source.
-func NewServer(pair *attestation.FederationPair, bundles jwtbundle.Source, addr string, authorizer authz.Authorizer) *Server {
+func NewServer(pair *attestation.FederationPair, bundles jwtbundle.Source, addr string, authorizer authz.Authorizer) (*Server, error) {
+	if pair == nil {
+		return nil, fmt.Errorf("federation pair is required")
+	}
+	remoteTD, err := spiffeid.TrustDomainFromString(pair.Remote.Name)
+	if err != nil {
+		return nil, fmt.Errorf("remote trust domain: %w", err)
+	}
 	s := &Server{
 		pair:       pair,
 		bundles:    bundles,
-		remoteTD:   spiffeid.RequireTrustDomainFromString(pair.Remote.Name),
+		remoteTD:   remoteTD,
 		authorizer: authorizer,
 	}
 	mux := http.NewServeMux()
@@ -42,7 +49,7 @@ func NewServer(pair *attestation.FederationPair, bundles jwtbundle.Source, addr 
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	return s
+	return s, nil
 }
 
 // Addr returns the listener's address. Only valid after Start is called.

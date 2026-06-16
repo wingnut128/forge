@@ -3,8 +3,8 @@ name: Dependabot auto-merge
 on: pull_request
 
 permissions:
-  contents: read
-  pull-requests: read
+  contents: write
+  pull-requests: write
 
 jobs:
   auto-merge:
@@ -37,6 +37,9 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
+      # Merge with GITHUB_TOKEN (elevated above), not the PAT: enabling
+      # auto-merge needs contents:write, and this keeps the long-lived PAT
+      # scoped to pull-requests:write for the code-owner approval only.
       - name: Enable auto-merge
         if: >-
           env.HAS_PAT == 'true' &&
@@ -45,4 +48,4 @@ jobs:
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,5 +1,7 @@
 ---
-image: cgr.dev/chainguard/go:latest-dev
+image:
+  name: cgr.dev/chainguard/go:latest-dev
+  entrypoint: [""]
 
 include:
   - template: Security/SAST.gitlab-ci.yml

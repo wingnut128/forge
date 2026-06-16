@@ -4,6 +4,35 @@ Forge demonstrates cross-cloud workload authentication and authorization built
 on SPIFFE/SPIRE federation. This note explains *why* the model is sound — the
 claim the POC exists to prove.
 
+```
+                    what `make demo` proves
+    ===========================================================
+
+    IDENTITY LAYER  (SPIFFE / SPIRE)        <-- proven by make demo
+    +-----------------------------------------------------------+
+    |   forge.gcp.local                       forge.aws.local   |
+    |   +---------------+   federation    +---------------+      |
+    |   | SPIRE server  |<===============>| SPIRE server  |      |
+    |   +---------------+  trust bundles   +---------------+      |
+    |          | mints       (RFC 9409)           ^ verify       |
+    |          v                                  | sig + aud    |
+    |     [ workload ] ====== JWT-SVID =====> [ forge serve ]    |
+    |                     aud=forge.aws.local         |          |
+    |                                                 v          |
+    |                                       {"valid": true}      |
+    +-----------------------------------------------------------+
+       no shared secret  .  no cross-cloud IAM trust
+       identity proven by signature, not by network position
+
+    NETWORK LAYER  (Bowtie mesh)            <-- model; Phase 2
+    +-----------------------------------------------------------+
+    |     GCP  <==========  encrypted path  ==========>  AWS    |
+    +-----------------------------------------------------------+
+
+    reachability =/= trust: a workload must REACH the service
+    AND prove identity (SPIFFE) AND pass policy (Cedar)
+```
+
 ## The problem
 
 A workload in GCP needs to call a service in AWS. The traditional answers are

@@ -1,6 +1,9 @@
 ---
 image: cgr.dev/chainguard/go:1.25
 
+include:
+  - template: Security/SAST.gitlab-ci.yml
+
 stages:
   - lint
   - build
@@ -67,9 +70,6 @@ semgrep:
       description: Semgrep app token — set in project CI/CD variables if using Semgrep Cloud Platform
 
 sast:
-  stage: security
-  include:
-    - template: Security/SAST.gitlab-ci.yml
   allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'

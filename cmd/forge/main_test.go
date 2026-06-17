@@ -181,6 +181,27 @@ func TestDeployFunc_EnableGKEAndEKS(t *testing.T) {
 	}
 }
 
+func TestDeployFunc_EnableManagedState(t *testing.T) {
+	cfg := strings.TrimSuffix(baseDeployConfig, "}") + `,"forge:enable-managed-state":"true","forge:spire-db-password":"s3cr3t"}`
+	t.Setenv("PULUMI_CONFIG", cfg)
+	t.Setenv("PULUMI_CONFIG_SECRET_KEYS", `["forge:spire-db-password"]`)
+
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return deployFunc(ctx)
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("deployFunc failed: %v", err)
+	}
+
+	// Managed-state track: Cloud SQL + RDS + KMS + Secret Manager resources appear.
+	for _, expected := range []string{"forge-dev-spire-sql", "forge-dev-spire-db", "forge-dev-spire-key", "forge-dev-spire-admin"} {
+		if !mock.hasResource(expected) {
+			t.Errorf("expected resource containing %q when enable-managed-state set, got %v", expected, mock.names)
+		}
+	}
+}
+
 func TestDeployFunc_DefaultStackName(t *testing.T) {
 	old := os.Getenv("FORGE_STACK")
 	_ = os.Unsetenv("FORGE_STACK")

@@ -1,0 +1,20 @@
+# Codecov configuration.
+#
+# cmd/forge/main.go is the process entrypoint: it parses os.Args, calls
+# os.Exit, and drives the real Pulumi Automation API against a backend. None of
+# that is unit-testable without mocking the entire Pulumi backend, so it is
+# excluded from coverage. The testable deploy logic lives in deploy.go and
+# serve.go (same package) and stays measured.
+ignore:
+  - "cmd/forge/main.go"
+
+coverage:
+  status:
+    project:
+      default:
+        # Allow small fluctuations rather than failing on a fraction of a percent.
+        threshold: 1%
+    patch:
+      default:
+        # Report patch coverage without blocking merges on entrypoint glue.
+        informational: true

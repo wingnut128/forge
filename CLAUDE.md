@@ -101,7 +101,9 @@ The entrypoint (`main.go`) uses Pulumi's **Automation API** (`auto.UpsertStackIn
 ### Code Layout
 
 ```
-cmd/forge/              → main.go: Automation API entrypoint + serve command
+cmd/forge/              → main.go: thin CLI entrypoint (os.Args dispatch + Automation API calls)
+                          deploy.go: deployFunc + provisioning phase helpers
+                          serve.go: runServe (attestation + authz HTTP server)
 pkg/config/             → config.go: loads and validates ForgeConfig from Pulumi stack config
 pkg/components/gcp/     → network.go, gke.go, workload_identity.go,
                           spire_server.go, bowtie.go, managed_state.go (GCP Pulumi components)

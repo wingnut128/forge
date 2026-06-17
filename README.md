@@ -107,5 +107,6 @@ no cross-cloud IAM trust. `make demo` exits `0` on success.
 
 See [`demo/README.md`](demo/README.md) for the architecture, the bootstrap flow,
 and full expected output; [`docs/why-this-model.md`](docs/why-this-model.md) for
-why the model is valid; and the
+why the model is valid; [`docs/threat-model.md`](docs/threat-model.md) for the
+STRIDE threat model and Phase-2 security gates; and the
 [design spec](docs/superpowers/specs/2026-06-15-spire-bootstrap-local-proof-design.md).

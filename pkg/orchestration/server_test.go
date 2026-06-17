@@ -350,6 +350,94 @@ func TestHandleValidate_AuthzSkippedWhenNoActionResource(t *testing.T) {
 	}
 }
 
+func TestHandleValidate_InvalidTokenErrorIsGeneric(t *testing.T) {
+	pair, bundle, _ := testPairAndBundle(t)
+	srv, err := NewServer(pair, bundle, ":0", nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	body, _ := json.Marshal(validateRequest{Token: "garbage"})
+	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.handleValidate(w, req)
+
+	var resp validateResponse
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	// The client must not receive the internal validation detail.
+	if resp.Error != "token validation failed" {
+		t.Errorf("error = %q, want generic %q", resp.Error, "token validation failed")
+	}
+}
+
+func TestHandleValidate_PartialAuthzFailsClosed(t *testing.T) {
+	pair, bundle, key := testPairAndBundle(t)
+	az := &stubAuthorizer{decision: authz.Decision{Allowed: true, Reason: "should not be reached"}}
+	srv, err := NewServer(pair, bundle, ":0", az)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	token := signTestJWT(t, key, "test-key-1", map[string]any{
+		"sub": "spiffe://remote.example.com/workload/api",
+		"aud": []string{"local.example.com"},
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	// Action without resource: authz must not be silently skipped.
+	body, _ := json.Marshal(validateRequest{Token: token, Action: "read-data"})
+	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.handleValidate(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleValidate_DenyReasonIsGeneric(t *testing.T) {
+	pair, bundle, key := testPairAndBundle(t)
+	az := &stubAuthorizer{decision: authz.Decision{Allowed: false, Reason: "policy test:0 forbids spiffe://..."}}
+	srv, err := NewServer(pair, bundle, ":0", az)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	token := signTestJWT(t, key, "test-key-1", map[string]any{
+		"sub": "spiffe://remote.example.com/workload/api",
+		"aud": []string{"local.example.com"},
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	body, _ := json.Marshal(validateRequest{Token: token, Action: "write-data", Resource: "pipeline-x"})
+	req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.handleValidate(w, req)
+
+	var resp validateResponse
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	// The internal policy id/reason must not leak to the caller.
+	if resp.DenyReason != "request not authorized" {
+		t.Errorf("deny_reason = %q, want generic %q", resp.DenyReason, "request not authorized")
+	}
+}
+
+func TestTokenBucket_LimitsAndRefills(t *testing.T) {
+	b := newTokenBucket(1000, 2) // burst of 2
+	first, second := b.allow(), b.allow()
+	if !first || !second {
+		t.Fatal("first two requests within burst should be allowed")
+	}
+	if b.allow() {
+		t.Error("third request should be rejected once burst is spent")
+	}
+	// At 1000 tokens/sec, a brief wait refills enough to allow again.
+	time.Sleep(10 * time.Millisecond)
+	if !b.allow() {
+		t.Error("request should be allowed after refill")
+	}
+}
+
 func TestHandleValidate_AuthzSkippedWhenNoAuthorizer(t *testing.T) {
 	pair, bundle, key := testPairAndBundle(t)
 	srv, err := NewServer(pair, bundle, ":0", nil) // nil authorizer

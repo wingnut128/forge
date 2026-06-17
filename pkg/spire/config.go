@@ -233,9 +233,16 @@ fi
 
 if [ ! -x /usr/local/bin/spire-server ]; then
   cd /tmp
-  curl -sSL -o spire.tar.gz "https://github.com/spiffe/spire/releases/download/v${SPIRE_VERSION}/spire-${SPIRE_VERSION}-linux-amd64-musl.tar.gz"
-  tar -xzf spire.tar.gz
-  install -m 0755 spire-${SPIRE_VERSION}/bin/spire-server /usr/local/bin/spire-server
+  SPIRE_PKG="spire-${SPIRE_VERSION}-linux-amd64-musl.tar.gz"
+  SPIRE_BASE="https://github.com/spiffe/spire/releases/download/v${SPIRE_VERSION}"
+  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 3 \
+    -o "${SPIRE_PKG}" "${SPIRE_BASE}/${SPIRE_PKG}"
+  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 3 \
+    -o "${SPIRE_PKG%%.tar.gz}_sha256sum.txt" "${SPIRE_BASE}/${SPIRE_PKG%%.tar.gz}_sha256sum.txt"
+  # Fail closed if the published checksum does not match the downloaded archive.
+  sha256sum -c "${SPIRE_PKG%%.tar.gz}_sha256sum.txt"
+  tar -xzf "${SPIRE_PKG}"
+  install -m 0755 "spire-${SPIRE_VERSION}/bin/spire-server" /usr/local/bin/spire-server
 fi
 
 mkdir -p /etc/spire /etc/spire/certs /var/lib/spire/data

@@ -2,6 +2,7 @@ package spire
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -119,5 +120,26 @@ func TestRenderAgentHCL_GCP(t *testing.T) {
 func TestRenderAgentHCL_RequiresFields(t *testing.T) {
 	if _, err := RenderAgentHCL(AgentConfig{}); err == nil {
 		t.Fatal("expected error for missing trust domain")
+	}
+}
+
+func TestRenderServerStartupScript_VerifiesDownload(t *testing.T) {
+	script := RenderServerStartupScript("1.11.2", "server {}", "/dev/xvdf")
+
+	// The SPIRE binary pull must be checksum-verified and fail closed.
+	for _, want := range []string{
+		"_sha256sum.txt",    // fetches the published checksum companion
+		"sha256sum -c",      // verifies the archive against it before use
+		"--proto '=https'",  // refuses plaintext redirects
+		"set -euo pipefail", // a failed verification aborts the script
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("startup script missing %q:\n%s", want, script)
+		}
+	}
+
+	// The unverified one-shot download must be gone.
+	if strings.Contains(script, "curl -sSL -o spire.tar.gz") {
+		t.Error("startup script still uses the unverified download")
 	}
 }

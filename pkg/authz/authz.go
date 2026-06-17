@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cedar-policy/cedar-go"
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
 // Authorizer evaluates whether a principal is allowed to perform an action on a resource.
@@ -75,14 +76,15 @@ func NewCedarAuthorizerFromPolicies(ps *cedar.PolicySet) *CedarAuthorizer {
 
 // IsAuthorized evaluates whether the given principal may perform the action on the resource.
 func (a *CedarAuthorizer) IsAuthorized(principal, action, resource string) (Decision, error) {
+	principalUID := cedar.NewEntityUID("SpiffeWorkload", cedar.String(principal))
 	req := cedar.Request{
-		Principal: cedar.NewEntityUID("SpiffeWorkload", cedar.String(principal)),
+		Principal: principalUID,
 		Action:    cedar.NewEntityUID("Action", cedar.String(action)),
 		Resource:  cedar.NewEntityUID("Resource", cedar.String(resource)),
 		Context:   cedar.NewRecord(cedar.RecordMap{}),
 	}
 
-	decision, diagnostic := cedar.Authorize(a.policies, a.entities, req)
+	decision, diagnostic := cedar.Authorize(a.policies, a.entitiesFor(principalUID, principal), req)
 
 	if decision == cedar.Allow {
 		reason := "default allow"
@@ -97,4 +99,23 @@ func (a *CedarAuthorizer) IsAuthorized(principal, action, resource string) (Deci
 		reason = diagnostic.Errors[0].Message
 	}
 	return Decision{Allowed: false, Reason: reason}, nil
+}
+
+// entitiesFor returns the entity set for evaluation, registering the principal
+// SpiffeWorkload with attributes parsed from its SPIFFE ID (trust_domain, path)
+// so attribute-based policies can reference them. Without this, an empty entity
+// store makes any `principal.<attr>` condition silently evaluate against nothing.
+func (a *CedarAuthorizer) entitiesFor(uid cedar.EntityUID, principal string) cedar.EntityMap {
+	entities := a.entities.Clone()
+
+	attrs := cedar.RecordMap{}
+	if id, err := spiffeid.FromString(principal); err == nil {
+		attrs["trust_domain"] = cedar.String(id.TrustDomain().Name())
+		attrs["path"] = cedar.String(id.Path())
+	}
+	entities[uid] = cedar.Entity{
+		UID:        uid,
+		Attributes: cedar.NewRecord(attrs),
+	}
+	return entities
 }

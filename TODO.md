@@ -29,3 +29,30 @@
 - [x] Add policy-as-code via Pulumi CrossGuard
 - [x] Add agent orchestration layer
 - [ ] Create example stack config (`Pulumi.dev.yaml.example`)
+
+## Security (from `docs/threat-model.md`)
+
+### Done (runtime data plane + supply chain)
+- [x] F-21: verify the SPIRE release download against the published `_sha256sum.txt` before install (fails closed)
+- [x] F-03: structured `slog` audit on validations, authz decisions, and trust-root changes
+- [x] F-04: generic client errors; no policy IDs leaked in `DenyReason`
+- [x] F-05: rate limit + whole-request timeout on `forge serve`
+- [x] F-06: `Valid` vs `Authorized` contract documented; partial authz requests fail closed
+- [x] F-08: bundle continuity guard (refuse empty bundle; warn on root change)
+- [x] F-09: honor `refreshHint`; track `LastRefresh`; surface staleness in `/healthz`
+- [x] F-11: populate Cedar `EntityMap` with SPIFFE-derived principal attributes
+
+### Open (no live-cloud / keystore dependency)
+- [ ] F-02: TLS (ideally mTLS) in front of `forge serve`
+- [ ] F-10: verify policy-file integrity at load
+- [ ] F-14: enforce IMDSv2 on the AWS SPIRE instance
+- [ ] F-18: Cloud SQL deletion protection + PITR
+- [ ] F-19: scope SPIRE ingress to the VPC CIDR, not `10.0.0.0/8`
+- [ ] F-20: restrict AWS SPIRE egress
+
+### Phase-2 gates (blocked on live cloud / keystore — see threat model)
+- [ ] F-15: move the SPIRE CA signing key off local disk to KMS (`gcp_kms`/`aws_kms`); exclude key material from disk snapshots
+- [ ] F-16: set the real GCP OIDC TLS thumbprint on the AWS IAM OIDC provider (currently all-zeros placeholder)
+- [ ] F-01: provision the bundle-endpoint serving cert; evaluate `https_spiffe` over `https_web`
+- [ ] F-13: replace `join_token` node attestation with cloud-native attestors (gcp_iit / aws_iid)
+- [ ] F-17: disable Cloud SQL public IPv4; private IP + authorized networks + SSL

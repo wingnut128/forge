@@ -127,6 +127,34 @@ func TestCedarAuthorizer_LoadFromDirectory(t *testing.T) {
 	}
 }
 
+func TestCedarAuthorizer_AttributeBasedPolicy(t *testing.T) {
+	// A policy that gates on the principal's trust_domain attribute only
+	// evaluates correctly when the principal entity is registered with attrs.
+	ps := policiesFromCedar(t, `
+		permit(
+			principal,
+			action == Action::"read-data",
+			resource == Resource::"pipeline-x"
+		)
+		when { principal.trust_domain == "remote.example.com" };
+	`)
+	a := NewCedarAuthorizerFromPolicies(ps)
+
+	d, err := a.IsAuthorized("spiffe://remote.example.com/workload/api", "read-data", "pipeline-x")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !d.Allowed {
+		t.Errorf("expected allow for matching trust_domain, got denied: %s", d.Reason)
+	}
+
+	// A principal from a different trust domain must not match.
+	d, _ = a.IsAuthorized("spiffe://other.example.com/workload/api", "read-data", "pipeline-x")
+	if d.Allowed {
+		t.Error("expected deny for non-matching trust_domain")
+	}
+}
+
 func TestCedarAuthorizer_EmptyDirectory(t *testing.T) {
 	dir := t.TempDir()
 	_, err := NewCedarAuthorizer(dir)

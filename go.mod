@@ -7,7 +7,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.3
 	github.com/pulumi/pulumi-gcp/sdk/v8 v8.41.1
-	github.com/pulumi/pulumi/sdk/v3 v3.247.0
+	github.com/pulumi/pulumi/sdk/v3 v3.248.0
 	github.com/spiffe/go-spiffe/v2 v2.8.1
 )
 

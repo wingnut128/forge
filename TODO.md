@@ -7,7 +7,7 @@
 
 ## Medium Priority (tests & reliability)
 - [x] Add tests for `pkg/config` (defaults, validation, edge cases)
-- [x] Add tests for `pkg/components/gcp` (Pulumi component tests)
+- [x] Add tests for `pkg/components/gcp` and `pkg/components/aws` (Pulumi component tests, all six components per cloud: network/VPC, K8s cluster, federation glue, SPIRE server, Bowtie controller, managed state)
 - [x] Add input validation in `pkg/config` (trust domain format, environment allowlist)
 
 ## Medium Priority (authorization)

@@ -118,3 +118,193 @@ func TestNewSPIREOIDCProvider_CreatesResources(t *testing.T) {
 		t.Errorf("expected resource containing %q, got %v", "forge-dev-spire-oidc-gcp", mock.names)
 	}
 }
+
+// --- SPIREServer tests ---
+
+func TestNewSPIREServer_CreatesResources(t *testing.T) {
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		server, err := NewSPIREServer(ctx, "test-spire", &SPIREServerArgs{
+			Environment:     "dev",
+			Region:          "us-east-1",
+			VPCID:           pulumi.ID("fake-vpc-id").ToIDOutput(),
+			PrivateSubnetID: pulumi.String("fake-subnet-id").ToStringOutput(),
+			InternalSGID:    pulumi.ID("fake-sg-id").ToIDOutput(),
+			AMI:             "ami-fake123",
+			TrustDomain:     "forge.dev.aws.example.com",
+			PeerTrustDomain: "forge.dev.gcp.example.com",
+			SPIREVersion:    "1.11.2",
+		})
+		if err != nil {
+			return err
+		}
+		if server == nil {
+			t.Error("expected non-nil SPIREServer")
+		}
+		return nil
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("RunErr failed: %v", err)
+	}
+
+	for _, expected := range []string{"forge-dev-sg-spire", "forge-dev-spire-server"} {
+		if !mock.hasResource(expected) {
+			t.Errorf("expected resource containing %q, got %v", expected, mock.names)
+		}
+	}
+}
+
+func TestNewSPIREServer_NilArgs(t *testing.T) {
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		if _, err := NewSPIREServer(ctx, "test-spire", nil); err == nil {
+			t.Error("expected error for nil args")
+		}
+		return nil
+	}, pulumi.WithMocks("test-project", "test-stack", &recordingMock{}))
+	if err != nil {
+		t.Fatalf("RunErr failed: %v", err)
+	}
+}
+
+func TestSpireAWSUserData(t *testing.T) {
+	tests := []struct {
+		name       string
+		managed    bool
+		wantDBType string
+	}{
+		{"disk mode", false, `database_type = "sqlite3"`},
+		{"managed mode", true, `database_type = "postgres"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userData, err := spireAWSUserData(&SPIREServerArgs{
+				TrustDomain:      "forge.dev.aws.example.com",
+				PeerTrustDomain:  "forge.dev.gcp.example.com",
+				SPIREVersion:     "1.11.2",
+				ManagedStateMode: tt.managed,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !strings.Contains(userData, "forge.dev.aws.example.com") {
+				t.Errorf("expected user data to reference trust domain, got: %s", userData)
+			}
+			if !strings.Contains(userData, tt.wantDBType) {
+				t.Errorf("expected user data to contain %q, got: %s", tt.wantDBType, userData)
+			}
+			if !strings.Contains(userData, "DEV=/dev/xvdf") {
+				t.Errorf("expected user data to reference AWS data volume device path, got: %s", userData)
+			}
+		})
+	}
+}
+
+func TestSpireAWSUserData_InvalidConfig(t *testing.T) {
+	if _, err := spireAWSUserData(&SPIREServerArgs{}); err == nil {
+		t.Error("expected error for missing trust domains")
+	}
+}
+
+// --- BowtieController tests ---
+
+func TestNewBowtieController_CreatesResources(t *testing.T) {
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		controller, err := NewBowtieController(ctx, "test-bowtie", &BowtieControllerArgs{
+			Environment:    "dev",
+			Region:         "us-east-1",
+			VPCID:          pulumi.ID("fake-vpc-id").ToIDOutput(),
+			PublicSubnetID: pulumi.String("fake-subnet-id").ToStringOutput(),
+			AMI:            "ami-fake123",
+			AdminCIDRs:     []string{"203.0.113.0/24"},
+		})
+		if err != nil {
+			return err
+		}
+		if controller == nil {
+			t.Error("expected non-nil BowtieController")
+		}
+		return nil
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("RunErr failed: %v", err)
+	}
+
+	for _, expected := range []string{"forge-dev-sg-bowtie", "forge-dev-eip-bowtie", "forge-dev-bowtie", "forge-dev-eip-bowtie-assoc"} {
+		if !mock.hasResource(expected) {
+			t.Errorf("expected resource containing %q, got %v", expected, mock.names)
+		}
+	}
+}
+
+func TestNewBowtieController_NilArgs(t *testing.T) {
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		if _, err := NewBowtieController(ctx, "test-bowtie", nil); err == nil {
+			t.Error("expected error for nil args")
+		}
+		return nil
+	}, pulumi.WithMocks("test-project", "test-stack", &recordingMock{}))
+	if err != nil {
+		t.Fatalf("RunErr failed: %v", err)
+	}
+}
+
+func TestNewBowtieController_MissingAMI(t *testing.T) {
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		_, err := NewBowtieController(ctx, "test-bowtie", &BowtieControllerArgs{
+			Environment:    "dev",
+			Region:         "us-east-1",
+			VPCID:          pulumi.ID("fake-vpc-id").ToIDOutput(),
+			PublicSubnetID: pulumi.String("fake-subnet-id").ToStringOutput(),
+		})
+		if err == nil {
+			t.Error("expected error for missing AMI")
+		}
+		return nil
+	}, pulumi.WithMocks("test-project", "test-stack", &recordingMock{}))
+	if err != nil {
+		t.Fatalf("RunErr failed: %v", err)
+	}
+}
+
+// --- ManagedState tests ---
+
+func TestNewManagedState_CreatesResources(t *testing.T) {
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		state, err := NewManagedState(ctx, "test-managed-state", &ManagedStateArgs{
+			Environment:      "dev",
+			PrivateSubnetIDs: pulumi.ToStringArray([]string{"subnet-a", "subnet-b"}).ToStringArrayOutput(),
+			InternalSGID:     pulumi.ID("fake-sg-id").ToIDOutput(),
+			DBPassword:       pulumi.String("fake-password"),
+		})
+		if err != nil {
+			return err
+		}
+		if state == nil {
+			t.Error("expected non-nil ManagedState")
+		}
+		return nil
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("RunErr failed: %v", err)
+	}
+
+	for _, expected := range []string{"forge-dev-spire-sng", "forge-dev-spire-db", "forge-dev-spire-key", "forge-dev-spire-admin"} {
+		if !mock.hasResource(expected) {
+			t.Errorf("expected resource containing %q, got %v", expected, mock.names)
+		}
+	}
+}
+
+func TestNewManagedState_NilArgs(t *testing.T) {
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		if _, err := NewManagedState(ctx, "test-managed-state", nil); err == nil {
+			t.Error("expected error for nil args")
+		}
+		return nil
+	}, pulumi.WithMocks("test-project", "test-stack", &recordingMock{}))
+	if err != nil {
+		t.Fatalf("RunErr failed: %v", err)
+	}
+}

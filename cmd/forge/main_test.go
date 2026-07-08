@@ -202,6 +202,69 @@ func TestDeployFunc_EnableManagedState(t *testing.T) {
 	}
 }
 
+func TestDeployFunc_MissingSpireAWSAMI(t *testing.T) {
+	cfg := `{
+		"forge:environment":"dev",
+		"forge:spire-trust-domain":"gcp.example.com",
+		"forge:aws-spire-trust-domain":"aws.example.com",
+		"forge:bowtie-gcp-image":"projects/bowtie/global/images/bowtie-1-0-0",
+		"forge:bowtie-aws-ami":"ami-bowtie0000000000"
+	}`
+	t.Setenv("PULUMI_CONFIG", cfg)
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return deployFunc(ctx)
+	}, pulumi.WithMocks("test-project", "test-stack", &recordingMock{}))
+	if err == nil {
+		t.Fatal("expected error when forge:spire-aws-ami is unset")
+	}
+	if !strings.Contains(err.Error(), "spire-aws-ami") {
+		t.Errorf("error = %q, want mention of spire-aws-ami", err)
+	}
+}
+
+func TestDeployFunc_MissingBowtieGCPImage(t *testing.T) {
+	cfg := `{
+		"forge:environment":"dev",
+		"forge:spire-trust-domain":"gcp.example.com",
+		"forge:aws-spire-trust-domain":"aws.example.com",
+		"forge:spire-aws-ami":"ami-0123456789abcdef0",
+		"forge:bowtie-aws-ami":"ami-bowtie0000000000"
+	}`
+	t.Setenv("PULUMI_CONFIG", cfg)
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return deployFunc(ctx)
+	}, pulumi.WithMocks("test-project", "test-stack", &recordingMock{}))
+	if err == nil {
+		t.Fatal("expected error when forge:bowtie-gcp-image is unset")
+	}
+	if !strings.Contains(err.Error(), "bowtie-gcp-image") {
+		t.Errorf("error = %q, want mention of bowtie-gcp-image", err)
+	}
+}
+
+func TestDeployFunc_MissingBowtieAWSAMI(t *testing.T) {
+	cfg := `{
+		"forge:environment":"dev",
+		"forge:spire-trust-domain":"gcp.example.com",
+		"forge:aws-spire-trust-domain":"aws.example.com",
+		"forge:spire-aws-ami":"ami-0123456789abcdef0",
+		"forge:bowtie-gcp-image":"projects/bowtie/global/images/bowtie-1-0-0"
+	}`
+	t.Setenv("PULUMI_CONFIG", cfg)
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return deployFunc(ctx)
+	}, pulumi.WithMocks("test-project", "test-stack", &recordingMock{}))
+	if err == nil {
+		t.Fatal("expected error when forge:bowtie-aws-ami is unset")
+	}
+	if !strings.Contains(err.Error(), "bowtie-aws-ami") {
+		t.Errorf("error = %q, want mention of bowtie-aws-ami", err)
+	}
+}
+
 func TestDeployFunc_DefaultStackName(t *testing.T) {
 	old := os.Getenv("FORGE_STACK")
 	_ = os.Unsetenv("FORGE_STACK")

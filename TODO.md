@@ -8,7 +8,9 @@
 ## Medium Priority (tests & reliability)
 - [x] Add tests for `pkg/config` (defaults, validation, edge cases)
 - [x] Add tests for `pkg/components/gcp` and `pkg/components/aws` (Pulumi component tests, all six components per cloud: network/VPC, K8s cluster, federation glue, SPIRE server, Bowtie controller, managed state)
+- [x] Add tests for `cmd/forge` deploy pipeline config-validation branches (missing `spire-aws-ami`/`bowtie-gcp-image`/`bowtie-aws-ami`) and `demo/gen`
 - [x] Add input validation in `pkg/config` (trust domain format, environment allowlist)
+- [ ] Refactor `runServe` to accept an injectable `context.Context` so the Cedar-authz-enabled code path can be covered by tests (currently blocked on `signal.NotifyContext` binding to real OS signals)
 
 ## Medium Priority (authorization)
 - [ ] Pluggable Cedar policy storage — support loading policies from S3, GCS, PostgreSQL, stdin (e.g., piped from Consul KV), not just local directory

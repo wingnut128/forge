@@ -7,7 +7,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.3
 	github.com/pulumi/pulumi-gcp/sdk/v8 v8.41.1
-	github.com/pulumi/pulumi/sdk/v3 v3.250.0
+	github.com/pulumi/pulumi/sdk/v3 v3.253.0
 	github.com/spiffe/go-spiffe/v2 v2.8.1
 )
 
@@ -79,7 +79,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/term v1.1.0 // indirect
 	github.com/pulumi/appdash v0.0.0-20231130102222-75f619a67231 // indirect
-	github.com/pulumi/esc v0.24.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 // indirect

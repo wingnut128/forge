@@ -161,7 +161,7 @@ AWS URNs: `forge:aws:VPC`, `forge:aws:EKSCluster`, `forge:aws:SPIREOIDCProvider`
 
 The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`, `enable-bowtie=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s, managed-state, or Bowtie paths.
 
-`enable-bowtie` gates both controller VMs. The Bowtie mesh is orthogonal to the SPIFFE trust claim the POC proves, so it stays off by default — enabling it costs roughly $37/month across both clouds and requires `bowtie-gcp-image` and `bowtie-aws-ami`. Note the vendor minimum is 2 cores / 4 GB RAM / 50 GB disk, which the current `e2-small` / `t3.small` and 20 GB disk defaults do not meet.
+`enable-bowtie` gates both controller VMs. The Bowtie mesh is orthogonal to the SPIFFE trust claim the POC proves, so it stays off by default — enabling it requires `bowtie-gcp-image` and `bowtie-aws-ami`. The VMs are sized to the documented vendor minimum and no higher (2 cores / 4 GB RAM / 50 GB disk → `e2-medium` + `t3.medium`), which costs roughly $60/month across both clouds.
 
 ### Authorization Model
 

@@ -44,9 +44,11 @@ func NewBowtieController(ctx *pulumi.Context, name string, args *BowtieControlle
 	parentOpt := pulumi.Parent(component)
 	namePrefix := fmt.Sprintf("forge-%s", args.Environment)
 
+	// Vendor minimum is 2 cores / 4 GB RAM / 50 GB disk. e2-medium is the
+	// smallest GCE type that meets it; anything below is under-spec.
 	machineType := args.MachineType
 	if machineType == "" {
-		machineType = "e2-small"
+		machineType = "e2-medium"
 	}
 	zone := args.Zone
 	if zone == "" {
@@ -66,7 +68,7 @@ func NewBowtieController(ctx *pulumi.Context, name string, args *BowtieControlle
 		BootDisk: &compute.InstanceBootDiskArgs{
 			InitializeParams: &compute.InstanceBootDiskInitializeParamsArgs{
 				Image: pulumi.String(args.Image),
-				Size:  pulumi.Int(20),
+				Size:  pulumi.Int(50),
 			},
 		},
 		NetworkInterfaces: compute.InstanceNetworkInterfaceArray{

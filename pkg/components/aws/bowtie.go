@@ -43,9 +43,11 @@ func NewBowtieController(ctx *pulumi.Context, name string, args *BowtieControlle
 	parentOpt := pulumi.Parent(component)
 	namePrefix := fmt.Sprintf("forge-%s", args.Environment)
 
+	// Vendor minimum is 2 cores / 4 GB RAM / 50 GB disk. t3.medium is the
+	// smallest x86 type that meets it; anything below is under-spec.
 	instanceType := args.InstanceType
 	if instanceType == "" {
-		instanceType = "t3.small"
+		instanceType = "t3.medium"
 	}
 
 	adminCIDRs := args.AdminCIDRs
@@ -109,7 +111,7 @@ func NewBowtieController(ctx *pulumi.Context, name string, args *BowtieControlle
 		VpcSecurityGroupIds:      pulumi.StringArray{sg.ID().ToStringOutput()},
 		AssociatePublicIpAddress: pulumi.Bool(false),
 		RootBlockDevice: &ec2.InstanceRootBlockDeviceArgs{
-			VolumeSize: pulumi.Int(20),
+			VolumeSize: pulumi.Int(50),
 			VolumeType: pulumi.String("gp3"),
 		},
 		Tags: pulumi.StringMap{

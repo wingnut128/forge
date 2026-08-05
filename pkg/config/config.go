@@ -31,6 +31,9 @@ var validTrustDomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-
 // validCIDR matches IPv4 CIDR blocks.
 var validCIDR = regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$`)
 
+// validWGKey matches the base64 encoding of a 32-byte Curve25519 key.
+var validWGKey = regexp.MustCompile(`^[A-Za-z0-9+/]{43}=$`)
+
 // ForgeConfig holds all stack configuration values.
 type ForgeConfig struct {
 	Environment         string
@@ -48,10 +51,16 @@ type ForgeConfig struct {
 	EnableManagedState bool
 	EnableMultiAZNAT   bool
 	EnableBowtie       bool
+	EnableVPN          bool
 
 	BowtieAdminCIDRs []string
 	BowtieGCPImage   string
 	BowtieAWSAMI     string
+
+	WGGCPPrivateKey string
+	WGGCPPublicKey  string
+	WGAWSPrivateKey string
+	WGAWSPublicKey  string
 
 	SPIREServerVersion string
 }
@@ -83,10 +92,16 @@ type ConfigInput struct {
 	EnableManagedState bool
 	EnableMultiAZNAT   bool
 	EnableBowtie       bool
+	EnableVPN          bool
 
 	BowtieAdminCIDRs []string
 	BowtieGCPImage   string
 	BowtieAWSAMI     string
+
+	WGGCPPrivateKey string
+	WGGCPPublicKey  string
+	WGAWSPrivateKey string
+	WGAWSPublicKey  string
 
 	SPIREServerVersion string
 }
@@ -117,6 +132,11 @@ func Load(ctx *pulumi.Context) (*ForgeConfig, error) {
 		EnableManagedState:  cfg.GetBool("enable-managed-state"),
 		EnableMultiAZNAT:    cfg.GetBool("enable-multi-az-nat"),
 		EnableBowtie:        cfg.GetBool("enable-bowtie"),
+		EnableVPN:           cfg.GetBool("enable-vpn"),
+		WGGCPPrivateKey:     cfg.Get("wg-gcp-private-key"),
+		WGGCPPublicKey:      cfg.Get("wg-gcp-public-key"),
+		WGAWSPrivateKey:     cfg.Get("wg-aws-private-key"),
+		WGAWSPublicKey:      cfg.Get("wg-aws-public-key"),
 		BowtieAdminCIDRs:    adminCIDRs,
 		BowtieGCPImage:      cfg.Get("bowtie-gcp-image"),
 		BowtieAWSAMI:        cfg.Get("bowtie-aws-ami"),
@@ -143,6 +163,21 @@ func NewForgeConfig(in ConfigInput) (*ForgeConfig, error) {
 			return nil, fmt.Errorf("bowtie-admin-cidrs entry %q is not a valid IPv4 CIDR", c)
 		}
 	}
+	// Validate at load time, not at the provisioning phase: a late failure
+	// leaves both VPCs, both NAT instances, and both SPIRE VMs already created
+	// and billing.
+	if in.EnableVPN {
+		for _, k := range []struct{ field, value string }{
+			{"wg-gcp-private-key", in.WGGCPPrivateKey},
+			{"wg-gcp-public-key", in.WGGCPPublicKey},
+			{"wg-aws-private-key", in.WGAWSPrivateKey},
+			{"wg-aws-public-key", in.WGAWSPublicKey},
+		} {
+			if err := validateWireGuardKey(k.field, k.value); err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	gkeNodeCount := defaultInt(in.GKENodeCount, DefaultGKENodeCount)
 	gkeMachineType := defaultString(in.GKEMachineType, DefaultGKEMachineType)
@@ -167,11 +202,28 @@ func NewForgeConfig(in ConfigInput) (*ForgeConfig, error) {
 		EnableManagedState:  in.EnableManagedState,
 		EnableMultiAZNAT:    in.EnableMultiAZNAT,
 		EnableBowtie:        in.EnableBowtie,
+		EnableVPN:           in.EnableVPN,
+		WGGCPPrivateKey:     in.WGGCPPrivateKey,
+		WGGCPPublicKey:      in.WGGCPPublicKey,
+		WGAWSPrivateKey:     in.WGAWSPrivateKey,
+		WGAWSPublicKey:      in.WGAWSPublicKey,
 		BowtieAdminCIDRs:    in.BowtieAdminCIDRs,
 		BowtieGCPImage:      in.BowtieGCPImage,
 		BowtieAWSAMI:        in.BowtieAWSAMI,
 		SPIREServerVersion:  spireVersion,
 	}, nil
+}
+
+// validateWireGuardKey checks the Curve25519 key encoding that `wg genkey` and
+// `wg pubkey` emit: 32 raw bytes as standard base64, i.e. 44 chars ending in '='.
+func validateWireGuardKey(field, value string) error {
+	if value == "" {
+		return fmt.Errorf("%s is required when enable-vpn is true (generate with `wg genkey` / `wg pubkey`)", field)
+	}
+	if !validWGKey.MatchString(value) {
+		return fmt.Errorf("%s must be a base64-encoded 32-byte WireGuard key (44 chars ending in '=')", field)
+	}
+	return nil
 }
 
 func validateTrustDomain(field, value string) error {

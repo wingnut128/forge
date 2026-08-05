@@ -26,8 +26,12 @@
 - [x] Size the Bowtie VMs to the documented vendor minimum (2 cores / 4 GB / 50 GB): `e2-medium` + `t3.medium`, 50 GB disks
 - [x] Feature-flagged managed state (Cloud SQL + RDS + KMS + Secret Manager)
 - [x] Post-provision SPIRE bootstrap — **Phase 1 local proof complete** (verified live via `make demo` on Apple `container`; MR !51): federation bundle exchange, registration entry, agent join token, GCP-minted JWT-SVID validated on the AWS-role `forge serve`
+- [x] Cross-cloud private transport — WireGuard point-to-point tunnel (`enable-vpn`), GCE gateway VM ↔ AWS fck-nat instance, so SPIRE is reachable only over the VPN
+- [ ] Repoint `PeerBundleEndpointURL` at the peer's tunnel-side address (currently `https://<peer-trust-domain>:8443`, which resolves to nothing)
 - [ ] Post-provision SPIRE bootstrap — Phase 2 live: wire bootstrap against live GCP/AWS VMs, real upstream CA, cloud-native node attestors
 - [ ] Bowtie licensing + initial admin bootstrap automation
+- [ ] Provision instance secrets from a secret store rather than instance metadata — AWS SSM Parameter Store and GCP Secret Manager, read at boot via the instance profile / service account. Applies to the WireGuard private keys (currently in userdata, so readable via IMDS by anything on the box) and to the SPIRE bundle-endpoint serving key when F-01 lands.
+- [ ] Revisit Bowtie for network-layer policy + PEP once federation is proven; resolve headless client enrollment with Bowtie support (browser/SSO login, device pre-authorization, client bundle contents)
 
 ## Low Priority (features & infra)
 - [x] Implement AWS components (`pkg/components/aws/`)

@@ -97,6 +97,11 @@ Set via `pulumi config set forge:<key> <value>`:
 | `enable-managed-state` | no | false (opt in to Cloud SQL + RDS + KMS + Secret Manager) |
 | `enable-multi-az-nat` | no | false (when false, a single NAT instance serves both AZs) |
 | `enable-bowtie` | no | false (opt in to the Bowtie controller VM per cloud) |
+| `enable-vpn` | no | false (opt in to the cross-cloud WireGuard tunnel) |
+| `wg-gcp-private-key` | conditional | — (`pulumi config set --secret`; required when `enable-vpn=true`) |
+| `wg-gcp-public-key` | conditional | — (required when `enable-vpn=true`) |
+| `wg-aws-private-key` | conditional | — (`pulumi config set --secret`; required when `enable-vpn=true`) |
+| `wg-aws-public-key` | conditional | — (required when `enable-vpn=true`) |
 | `gke-node-count` | no | 3 |
 | `gke-machine-type` | no | e2-standard-4 |
 | `eks-node-count` | no | 3 |
@@ -131,6 +136,7 @@ pkg/config/             → config.go: loads and validates ForgeConfig from Pulu
 pkg/components/gcp/     → network.go, gke.go, workload_identity.go,
                           spire_server.go, bowtie.go, managed_state.go (GCP Pulumi components)
 pkg/components/aws/     → vpc.go, fcknat.go, eks.go, spire_oidc.go, spire_server.go, bowtie.go, managed_state.go (AWS Pulumi components)
+pkg/wireguard/          → config.go: renders the cross-cloud tunnel's boot config (cloud-agnostic)
 pkg/attestation/        → trust.go, bundle.go, validate.go (SPIFFE federation + JWT-SVID validation)
 pkg/orchestration/      → server.go: HTTP server for /validate and /healthz endpoints
 pkg/authz/              → authz.go: Cedar-based ABAC authorization
@@ -159,6 +165,20 @@ AWS URNs: `forge:aws:VPC`, `forge:aws:EKSCluster`, `forge:aws:SPIREOIDCProvider`
 - **GCP foundation**: Network (VPC + mgmt subnet + Cloud NAT) → optionally GKECluster + WorkloadIdentity → optionally ManagedState → SPIREServer VM → BowtieController VM
 - **AWS foundation**: VPC (private/public subnets + IGW + fck-nat) → optionally EKSCluster + SPIREOIDCProvider → optionally ManagedState → SPIREServer EC2 → BowtieController EC2
 
+### Cross-cloud transport: WireGuard tunnel
+
+The SPIRE servers are reachable **only over the VPN** — neither has a public IP, and neither cloud exposes its SPIRE ports to the internet. `enable-vpn` provisions a point-to-point WireGuard tunnel between a GCE gateway VM (`pkg/components/gcp/vpn_gateway.go`) and the AZ-a fck-nat instance on the AWS side, which doubles as the tunnel endpoint.
+
+Tunnel addressing lives in `pkg/wireguard`: a `10.99.0.0/30` carrying GCP on `.1` and AWS on `.2`. Each side routes the peer's whole VPC CIDR (`10.0.0.0/16` GCP, `10.1.0.0/16` AWS) through the tunnel, so no SNAT is needed in either direction.
+
+**The two clouds each need the other's public endpoint**, which would be circular. It is broken by reserving the GCP static address first (`vpnAddressPhase` in `cmd/forge/deploy.go`), letting AWS allowlist it while building its NAT instance, then handing the AWS NAT address to the GCP gateway afterwards. Keep that ordering.
+
+Packet forwarding must be enabled on both gateways or they silently drop routed traffic: `CanIpForward` on GCE, and `SourceDestCheck: false` on the AWS ENI (already required for NAT).
+
+`pkg/wireguard` is deliberately cloud-agnostic and the SPIRE components know nothing about it — the transport is meant to be swappable for a Bowtie mesh later.
+
+**The private keys currently reach the hosts through instance metadata**, which is readable via IMDS by anything on the box. That is a known POC-grade shortcut; the TODO to move them into SSM Parameter Store / GCP Secret Manager is tracked and should land before this is anything but a proof.
+
 ### AWS egress: fck-nat, not NAT Gateway
 
 Private-subnet egress runs through [fck-nat](https://fck-nat.dev) NAT instances (`pkg/components/aws/fcknat.go`) instead of a managed NAT Gateway — roughly $10/month against $36.50, and the SPIRE server's only real egress need is a one-time ~30 MB download at boot.
@@ -177,7 +197,13 @@ Both the NAT instances and the SPIRE server EC2 carry an instance profile with `
 
 The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`, `enable-bowtie=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s, managed-state, or Bowtie paths.
 
-`enable-bowtie` gates both controller VMs. The Bowtie mesh is orthogonal to the SPIFFE trust claim the POC proves, so it stays off by default — enabling it requires `bowtie-gcp-image` and `bowtie-aws-ami`. The VMs are sized to the documented vendor minimum and no higher (2 cores / 4 GB RAM / 50 GB disk → `e2-medium` + `t3.medium`), which costs roughly $60/month across both clouds.
+`enable-bowtie` gates both controller VMs, and is off by default because Bowtie is **deferred**, not because it is unimportant. Its purpose in the design is network-level access control — policy statements evaluated through a PEP engine, proving access control at the network layer alongside the workload-identity layer SPIFFE proves. That is a second demonstration, not plumbing.
+
+It is deferred because client enrollment has unresolved blockers for this topology: the documented flow authenticates via interactive browser/SSO login, which headless SPIRE VMs in private subnets cannot perform; pre-authorization keys on device serials that do not exist until Pulumi creates the instances; and the pre-configured client bundle's contents (endpoint only, or credentials too) are undocumented. Those are questions for Bowtie support.
+
+Until then the POC uses a plain WireGuard point-to-point tunnel purely as transport. **Keep the transport pluggable** — nothing should assume WireGuard specifically, so Bowtie can be swapped back in when network policy comes into scope.
+
+The controller VMs are sized to the documented vendor minimum and no higher (2 cores / 4 GB RAM / 50 GB disk → `e2-medium` + `t3.medium`), roughly $60/month across both clouds when enabled.
 
 ### Authorization Model
 

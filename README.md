@@ -43,6 +43,7 @@ forge/
 | Flags | What you get | Rough monthly floor |
 |---|---|---|
 | (defaults) | 2 VPCs + fck-nat + 2 SPIRE VMs (e2-small / t3.small) | ~$44 |
+| `enable-vpn=true` | Above + a GCE WireGuard gateway (e2-micro) + static IP | adds ~$10 |
 | `enable-bowtie=true` | Above + 2 Bowtie controller VMs (vendor minimum spec) + 2 static IPs | adds ~$60 |
 | `enable-managed-state=true` | Above + Cloud SQL db-f1-micro + RDS db.t4g.micro + KMS keys | ~$75-110 |
 | `enable-gke=true,enable-eks=true` | Above + full GKE and EKS control planes/node groups | ~$250+ |

@@ -7,8 +7,8 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// vpcCIDR is the AWS-side address space, chosen not to overlap GCP's 10.0.0.0/20.
-const vpcCIDR = "10.1.0.0/16"
+// VPCCIDR is the AWS-side address space, chosen not to overlap GCP.
+const VPCCIDR = "10.1.0.0/16"
 
 // VPCArgs configures the AWS VPC component.
 type VPCArgs struct {
@@ -27,6 +27,15 @@ type VPCArgs struct {
 	FckNatAMIOwner        string
 	FckNatAMINamePattern  string
 	FckNatAMIArchitecture string
+
+	// WireGuard settings for the cross-cloud tunnel, terminated on the AZ-a NAT
+	// instance. Empty WGPrivateKey leaves the NAT instances as plain NAT.
+	WGPrivateKey    string
+	WGPeerPublicKey string
+	// WGPeerEndpoint is the GCP gateway's reserved public IP.
+	WGPeerEndpoint pulumi.StringOutput
+	// WGPeerCIDR is the GCP address space reachable through the tunnel.
+	WGPeerCIDR string
 }
 
 // VPC is a Pulumi component resource that provisions an AWS VPC with:
@@ -40,6 +49,9 @@ type VPC struct {
 	SubnetIDs       pulumi.StringArrayOutput
 	PublicSubnetIDs pulumi.StringArrayOutput
 	InternalSGID    pulumi.IDOutput
+	// NATPublicIP is the AZ-a NAT instance's stable address — the endpoint the
+	// GCP gateway dials for the tunnel.
+	NATPublicIP pulumi.StringOutput
 }
 
 // NewVPC creates the VPC, subnets, IGW, NAT instances, route tables, and security group.
@@ -57,7 +69,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 	namePrefix := fmt.Sprintf("forge-%s", args.Environment)
 
 	vpc, err := ec2.NewVpc(ctx, namePrefix+"-vpc", &ec2.VpcArgs{
-		CidrBlock:          pulumi.String(vpcCIDR),
+		CidrBlock:          pulumi.String(VPCCIDR),
 		EnableDnsSupport:   pulumi.Bool(true),
 		EnableDnsHostnames: pulumi.Bool(true),
 		Tags: pulumi.StringMap{
@@ -162,12 +174,17 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 		namePrefix:     namePrefix,
 		suffix:         "a",
 		vpcID:          vpc.ID(),
-		vpcCIDR:        vpcCIDR,
+		vpcCIDR:        VPCCIDR,
 		publicSubnetID: publicSubnetA.ID(),
 		instanceType:   args.NATInstanceType,
 		amiOwner:       args.FckNatAMIOwner,
 		amiNamePattern: args.FckNatAMINamePattern,
 		amiArch:        args.FckNatAMIArchitecture,
+
+		wgPrivateKey:    args.WGPrivateKey,
+		wgPeerPublicKey: args.WGPeerPublicKey,
+		wgPeerEndpoint:  args.WGPeerEndpoint,
+		wgPeerCIDR:      args.WGPeerCIDR,
 	}, pulumi.Parent(component), pulumi.DependsOn([]pulumi.Resource{igw}))
 	if err != nil {
 		return nil, err
@@ -202,7 +219,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 			namePrefix:     namePrefix,
 			suffix:         "b",
 			vpcID:          vpc.ID(),
-			vpcCIDR:        vpcCIDR,
+			vpcCIDR:        VPCCIDR,
 			publicSubnetID: publicSubnetB.ID(),
 			instanceType:   args.NATInstanceType,
 			amiOwner:       args.FckNatAMIOwner,
@@ -244,7 +261,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 				Protocol:   pulumi.String("-1"),
 				FromPort:   pulumi.Int(0),
 				ToPort:     pulumi.Int(0),
-				CidrBlocks: pulumi.StringArray{pulumi.String(vpcCIDR)},
+				CidrBlocks: pulumi.StringArray{pulumi.String(VPCCIDR)},
 			},
 		},
 		Egress: ec2.SecurityGroupEgressArray{
@@ -265,6 +282,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 
 	component.ID = vpc.ID()
 	component.InternalSGID = internalSG.ID()
+	component.NATPublicIP = natA.PublicIP
 	component.SubnetIDs = pulumi.StringArray{
 		privateSubnetA.ID().ToStringOutput(),
 		privateSubnetB.ID().ToStringOutput(),

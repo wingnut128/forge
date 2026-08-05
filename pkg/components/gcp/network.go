@@ -7,6 +7,17 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
+// GCP-side address space.
+//
+// VPCCIDR spans both subnets below, so it is what the AWS peer routes through
+// the tunnel — the SPIRE server lives on the management subnet, which sits
+// outside the primary subnet's /20.
+const (
+	VPCCIDR           = "10.0.0.0/16"
+	PrimarySubnetCIDR = "10.0.0.0/20"
+	MgmtSubnetCIDR    = "10.0.16.0/24"
+)
+
 // NetworkArgs configures the VPC network component.
 type NetworkArgs struct {
 	Environment string
@@ -53,7 +64,7 @@ func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pul
 
 	subnet, err := compute.NewSubnetwork(ctx, namePrefix+"-subnet", &compute.SubnetworkArgs{
 		Network:     vpc.ID(),
-		IpCidrRange: pulumi.String("10.0.0.0/20"),
+		IpCidrRange: pulumi.String(PrimarySubnetCIDR),
 		Region:      pulumi.String(args.Region),
 		SecondaryIpRanges: compute.SubnetworkSecondaryIpRangeArray{
 			&compute.SubnetworkSecondaryIpRangeArgs{
@@ -75,7 +86,7 @@ func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pul
 	// Kept disjoint from the primary /20 and the pod/service secondary ranges.
 	mgmtSubnet, err := compute.NewSubnetwork(ctx, namePrefix+"-mgmt-subnet", &compute.SubnetworkArgs{
 		Network:               vpc.ID(),
-		IpCidrRange:           pulumi.String("10.0.16.0/24"),
+		IpCidrRange:           pulumi.String(MgmtSubnetCIDR),
 		Region:                pulumi.String(args.Region),
 		PrivateIpGoogleAccess: pulumi.Bool(true),
 	}, parentOpt)

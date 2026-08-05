@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -295,5 +297,62 @@ func TestDeployFunc_DefaultStackName(t *testing.T) {
 	}
 	if stackName != "dev" {
 		t.Errorf("default stack name = %q, want %q", stackName, "dev")
+	}
+}
+
+func TestDeployFunc_EnableVPN(t *testing.T) {
+	// Shape-valid WireGuard keys, computed so they cannot be mistaken for real
+	// key material by secret scanners.
+	key := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	cfg := strings.TrimSuffix(baseDeployConfig, "}") + fmt.Sprintf(
+		`,"forge:enable-vpn":"true","forge:wg-gcp-private-key":%q,"forge:wg-gcp-public-key":%q,`+
+			`"forge:wg-aws-private-key":%q,"forge:wg-aws-public-key":%q}`, key, key, key, key)
+	t.Setenv("PULUMI_CONFIG", cfg)
+
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return deployFunc(ctx)
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("deployFunc failed: %v", err)
+	}
+
+	for _, expected := range []string{"forge-dev-vpn-ip", "forge-dev-vpn", "forge-dev-allow-wg", "forge-dev-route-aws"} {
+		if !mock.hasResource(expected) {
+			t.Errorf("expected resource containing %q, got %v", expected, mock.names)
+		}
+	}
+}
+
+func TestDeployFunc_VPNDisabledByDefault(t *testing.T) {
+	t.Setenv("PULUMI_CONFIG", baseDeployConfig)
+
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return deployFunc(ctx)
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("deployFunc failed: %v", err)
+	}
+
+	for _, notExpected := range []string{"forge-dev-vpn", "forge-dev-route-aws"} {
+		if mock.hasResource(notExpected) {
+			t.Errorf("did not expect %q when enable-vpn is off, got %v", notExpected, mock.names)
+		}
+	}
+}
+
+func TestDeployFunc_VPNWithoutKeysFails(t *testing.T) {
+	cfg := strings.TrimSuffix(baseDeployConfig, "}") + `,"forge:enable-vpn":"true"}`
+	t.Setenv("PULUMI_CONFIG", cfg)
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return deployFunc(ctx)
+	}, pulumi.WithMocks("test-project", "test-stack", &recordingMock{}))
+	if err == nil {
+		t.Fatal("expected error when enable-vpn is set without WireGuard keys")
+	}
+	if !strings.Contains(err.Error(), "wg-gcp-private-key") {
+		t.Errorf("error = %q, want mention of wg-gcp-private-key", err)
 	}
 }

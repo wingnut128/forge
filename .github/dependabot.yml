@@ -15,3 +15,11 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "ci(deps)"
+    # codeql-action is pinned to the floating @v4 tag, which already picks up
+    # patches and minors. Left alone, Dependabot proposes narrowing it to a
+    # fixed patch pin (#29, reverted in #30). Major bumps still open PRs.
+    ignore:
+      - dependency-name: "github/codeql-action"
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor

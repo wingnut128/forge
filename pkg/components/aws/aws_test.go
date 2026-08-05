@@ -168,7 +168,8 @@ func TestNewSPIREServer_CreatesResources(t *testing.T) {
 		t.Fatalf("RunErr failed: %v", err)
 	}
 
-	for _, expected := range []string{"forge-dev-sg-spire", "forge-dev-spire-server"} {
+	// The SSM profile is the only way onto this box — it has no key pair.
+	for _, expected := range []string{"forge-dev-sg-spire", "forge-dev-spire-server", "forge-dev-spire-profile", "forge-dev-spire-ssm"} {
 		if !mock.hasResource(expected) {
 			t.Errorf("expected resource containing %q, got %v", expected, mock.names)
 		}

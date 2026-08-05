@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/wingnut128/forge/pkg/spire"
 )
@@ -78,12 +79,43 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 		return nil, fmt.Errorf("spire server user data: %w", err)
 	}
 
+	// The instance sits in a private subnet with no key pair, so SSM Session
+	// Manager is the only way onto it. Without this role a failed boot — a bad
+	// download, a dead NAT, a crash-looping spire-server — is undiagnosable.
+	role, err := iam.NewRole(ctx, namePrefix+"-spire-role", &iam.RoleArgs{
+		AssumeRolePolicy: pulumi.String(`{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"Service": "ec2.amazonaws.com"},
+    "Action": "sts:AssumeRole"
+  }]
+}`),
+		Tags: pulumi.StringMap{"Name": pulumi.String(namePrefix + "-spire-role")},
+	}, parentOpt)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := iam.NewRolePolicyAttachment(ctx, namePrefix+"-spire-ssm", &iam.RolePolicyAttachmentArgs{
+		Role:      role.Name,
+		PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"),
+	}, parentOpt); err != nil {
+		return nil, err
+	}
+	profile, err := iam.NewInstanceProfile(ctx, namePrefix+"-spire-profile", &iam.InstanceProfileArgs{
+		Role: role.Name,
+	}, parentOpt)
+	if err != nil {
+		return nil, err
+	}
+
 	instance, err := ec2.NewInstance(ctx, namePrefix+"-spire-server", &ec2.InstanceArgs{
 		Ami:                      pulumi.String(args.AMI),
 		InstanceType:             pulumi.String(instanceType),
 		SubnetId:                 args.PrivateSubnetID,
 		VpcSecurityGroupIds:      pulumi.StringArray{sg.ID().ToStringOutput(), args.InternalSGID.ToStringOutput()},
 		AssociatePublicIpAddress: pulumi.Bool(false),
+		IamInstanceProfile:       profile.Name,
 		UserData:                 pulumi.String(userData),
 		RootBlockDevice: &ec2.InstanceRootBlockDeviceArgs{
 			VolumeSize: pulumi.Int(10),

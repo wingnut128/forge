@@ -171,6 +171,8 @@ Two things that will silently break it if changed:
 
 The AMI is discovered via `LookupAmi` against owner `568608671756`, name `fck-nat-al2023-*`, architecture `arm64`. Override with `FckNatAMIOwner` / `FckNatAMINamePattern` / `FckNatAMIArchitecture` on `VPCArgs` if the vendor rotates any of them.
 
+Both the NAT instances and the SPIRE server EC2 carry an instance profile with `AmazonSSMManagedInstanceCore`. Neither has a key pair and both sit behind private routing, so SSM Session Manager is the only way onto either box — without it, a failed boot is undiagnosable. The SPIRE server's download also retries for ~50s (`--retry 10 --retry-delay 5 --retry-all-errors`) because it can boot before the NAT instance has finished bringing up iptables.
+
 **The architecture filter is load-bearing.** The name pattern matches both architectures, and fck-nat publishes the x86_64 image a few minutes ahead of arm64 — so `MostRecent` without an architecture filter selects x86_64 and hands it to a `t4g.nano`, which fails to boot. If you change `NATInstanceType` to an x86 type, change `FckNatAMIArchitecture` to `x86_64` in the same edit.
 
 The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`, `enable-bowtie=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s, managed-state, or Bowtie paths.

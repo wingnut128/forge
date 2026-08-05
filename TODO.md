@@ -51,7 +51,7 @@
 ### Open (no live-cloud / keystore dependency)
 - [ ] F-02: TLS (ideally mTLS) in front of `forge serve`
 - [ ] F-10: verify policy-file integrity at load
-- [ ] F-14: enforce IMDSv2 on the AWS SPIRE instance
+- [ ] F-14: enforce IMDSv2 on the AWS SPIRE instance (already required on the fck-nat launch template)
 - [ ] F-18: Cloud SQL deletion protection + PITR
 - [ ] F-19: scope SPIRE ingress to the VPC CIDR, not `10.0.0.0/8`
 - [ ] F-20: restrict AWS SPIRE egress

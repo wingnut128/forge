@@ -11,10 +11,6 @@ jobs:
     name: Auto-merge Dependabot PRs
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login == 'dependabot[bot]'
-    # HAS_PAT lets the approve/merge steps no-op until the token is set, so the
-    # workflow doesn't fail on Dependabot PRs before the secret exists.
-    env:
-      HAS_PAT: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN != '' }}
     steps:
       - name: Harden the runner
         uses: step-security/harden-runner@v2
@@ -23,28 +19,14 @@ jobs:
       - name: Fetch Dependabot metadata
         id: meta
         uses: dependabot/fetch-metadata@v3
-      # Patch and minor only; major bumps stay manual. The approval uses a
-      # fine-grained PAT acting as the code owner (CODEOWNERS), which satisfies
-      # the require_code_owner_reviews gate that GITHUB_TOKEN cannot. Branch
-      # protection still gates the actual merge on the required CI checks, so a
-      # failing bump never lands.
-      - name: Approve as code owner
-        if: >-
-          env.HAS_PAT == 'true' &&
-          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-           steps.meta.outputs.update-type == 'version-update:semver-minor')
-        run: gh pr review --approve "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }}
-      # Merge with GITHUB_TOKEN (elevated above), not the PAT: enabling
-      # auto-merge needs contents:write, and this keeps the long-lived PAT
-      # scoped to pull-requests:write for the code-owner approval only.
+      # Patch and minor only; major bumps stay manual. GITHUB_TOKEN suffices
+      # now that main no longer requires a code-owner review — no long-lived
+      # PAT to rotate. Branch protection still gates the actual merge on the
+      # required CI checks, so a failing bump never lands.
       - name: Enable auto-merge
         if: >-
-          env.HAS_PAT == 'true' &&
-          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-           steps.meta.outputs.update-type == 'version-update:semver-minor')
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}

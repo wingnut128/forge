@@ -219,3 +219,48 @@ func TestRenderServerHCL_RejectsUnknownProfile(t *testing.T) {
 		t.Fatal("expected error for unknown bundle profile")
 	}
 }
+
+func TestRenderAgentStartupScript_DoesNotStartWithoutToken(t *testing.T) {
+	script := RenderAgentStartupScript("1.11.2", "agent {}")
+
+	// The join token is single-use and minted at bootstrap, so the unit must
+	// not start until an operator supplies it.
+	for _, want := range []string{
+		"ConditionPathExists=/etc/spire/agent-join-token",
+		"EnvironmentFile=/etc/spire/agent-join-token",
+		"forge-agent-join",
+		"umask 077",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("agent script missing %q:\n%s", want, script)
+		}
+	}
+	if strings.Contains(script, "systemctl enable --now spire-agent\n\nsystemctl daemon-reload") {
+		t.Error("agent must not be started by the startup script itself")
+	}
+}
+
+func TestRenderAgentStartupScript_VerifiesDownload(t *testing.T) {
+	script := RenderAgentStartupScript("1.11.2", "agent {}")
+	for _, want := range []string{
+		"_sha256sum.txt",
+		"sha256sum -c",
+		"--proto '=https'",
+		"install -m 0755 \"spire-${SPIRE_VERSION}/bin/spire-agent\" /usr/local/bin/spire-agent",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("agent script missing %q:\n%s", want, script)
+		}
+	}
+}
+
+// Both scripts must share one fail-closed download path.
+func TestInstallFragment_SharedByServerAndAgent(t *testing.T) {
+	server := RenderServerStartupScript("1.11.2", "server {}", "/dev/xvdf")
+	agent := RenderAgentStartupScript("1.11.2", "agent {}")
+	for _, want := range []string{"sha256sum -c", "--retry-all-errors", "--proto '=https'"} {
+		if !strings.Contains(server, want) || !strings.Contains(agent, want) {
+			t.Errorf("%q must appear in both server and agent scripts", want)
+		}
+	}
+}

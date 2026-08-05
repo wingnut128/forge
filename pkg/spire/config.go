@@ -274,26 +274,7 @@ if ! mountpoint -q /var/lib/spire; then
   mount /var/lib/spire
 fi
 
-if [ ! -x /usr/local/bin/spire-server ]; then
-  cd /tmp
-  SPIRE_PKG="spire-${SPIRE_VERSION}-linux-amd64-musl.tar.gz"
-  SPIRE_BASE="https://github.com/spiffe/spire/releases/download/v${SPIRE_VERSION}"
-  # Retry generously: this VM may boot before the NAT instance finishes
-  # bringing up iptables (~20-30s). curl's default backoff gives up in ~7s,
-  # and with 'set -euo pipefail' a failed download aborts the whole script.
-  # --retry-all-errors is required because connection refused/timeout is not
-  # one of curl's default "transient" retry conditions.
-  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
-    --retry 10 --retry-delay 5 --retry-all-errors \
-    -o "${SPIRE_PKG}" "${SPIRE_BASE}/${SPIRE_PKG}"
-  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
-    --retry 10 --retry-delay 5 --retry-all-errors \
-    -o "${SPIRE_PKG%%.tar.gz}_sha256sum.txt" "${SPIRE_BASE}/${SPIRE_PKG%%.tar.gz}_sha256sum.txt"
-  # Fail closed if the published checksum does not match the downloaded archive.
-  sha256sum -c "${SPIRE_PKG%%.tar.gz}_sha256sum.txt"
-  tar -xzf "${SPIRE_PKG}"
-  install -m 0755 "spire-${SPIRE_VERSION}/bin/spire-server" /usr/local/bin/spire-server
-fi
+%s
 
 mkdir -p /etc/spire /etc/spire/certs /var/lib/spire/data
 cat >/etc/spire/server.conf <<'CONF'
@@ -316,7 +297,35 @@ UNIT
 
 systemctl daemon-reload
 systemctl enable --now spire-server
-`, version, devicePath, serverHCL)
+`, version, devicePath, spireInstallFragment("spire-server"), serverHCL)
+}
+
+// spireInstallFragment returns the guarded, checksum-verified download and
+// install of one SPIRE binary. It expects SPIRE_VERSION to be set by the
+// caller, and is shared by the server and agent scripts so the fail-closed
+// verification cannot drift between them.
+func spireInstallFragment(binary string) string {
+	const tmpl = `if [ ! -x /usr/local/bin/__BIN__ ]; then
+  cd /tmp
+  SPIRE_PKG="spire-${SPIRE_VERSION}-linux-amd64-musl.tar.gz"
+  SPIRE_BASE="https://github.com/spiffe/spire/releases/download/v${SPIRE_VERSION}"
+  # Retry generously: this VM may boot before the NAT instance finishes
+  # bringing up iptables (~20-30s). curl's default backoff gives up in ~7s,
+  # and with 'set -euo pipefail' a failed download aborts the whole script.
+  # --retry-all-errors is required because connection refused/timeout is not
+  # one of curl's default "transient" retry conditions.
+  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+    --retry 10 --retry-delay 5 --retry-all-errors \
+    -o "${SPIRE_PKG}" "${SPIRE_BASE}/${SPIRE_PKG}"
+  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+    --retry 10 --retry-delay 5 --retry-all-errors \
+    -o "${SPIRE_PKG%.tar.gz}_sha256sum.txt" "${SPIRE_BASE}/${SPIRE_PKG%.tar.gz}_sha256sum.txt"
+  # Fail closed if the published checksum does not match the downloaded archive.
+  sha256sum -c "${SPIRE_PKG%.tar.gz}_sha256sum.txt"
+  tar -xzf "${SPIRE_PKG}"
+  install -m 0755 "spire-${SPIRE_VERSION}/bin/__BIN__" /usr/local/bin/__BIN__
+fi`
+	return strings.ReplaceAll(tmpl, "__BIN__", binary)
 }
 
 func applyServerDefaults(cfg *ServerConfig) {
@@ -358,4 +367,68 @@ func applyServerDefaults(cfg *ServerConfig) {
 	if cfg.PeerEndpointSpiffeID == "" {
 		cfg.PeerEndpointSpiffeID = "spiffe://" + cfg.PeerTrustDomain + "/spire/server"
 	}
+}
+
+// RenderAgentStartupScript returns a bash script that installs spire-agent,
+// writes agent.conf, and installs a systemd unit — but deliberately does NOT
+// start the agent.
+//
+// A join token is single-use and minted by the server at bootstrap time, so it
+// cannot be baked in at deploy time. The unit reads it from an EnvironmentFile
+// that does not exist yet; the operator supplies it once via the generated
+// forge-agent-join helper:
+//
+//	forge-agent-join <token>
+//
+// This keeps the provisioning declarative and the secret out of instance
+// metadata, where anything on the box could read it through IMDS.
+func RenderAgentStartupScript(version, agentHCL string) string {
+	return fmt.Sprintf(`#!/bin/bash
+set -euo pipefail
+SPIRE_VERSION=%q
+
+%s
+
+mkdir -p /etc/spire /var/lib/spire/agent
+cat >/etc/spire/agent.conf <<'CONF'
+%s
+CONF
+
+cat >/etc/systemd/system/spire-agent.service <<'UNIT'
+[Unit]
+Description=SPIRE Agent
+After=network-online.target
+Wants=network-online.target
+# The join token is supplied at bootstrap, not at deploy time.
+ConditionPathExists=/etc/spire/agent-join-token
+
+[Service]
+EnvironmentFile=/etc/spire/agent-join-token
+ExecStart=/usr/local/bin/spire-agent run -config /etc/spire/agent.conf -joinToken ${JOIN_TOKEN}
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+cat >/usr/local/bin/forge-agent-join <<'HELPER'
+#!/bin/bash
+# Supply the one-time join token minted by:
+#   spire-server token generate -spiffeID <agent-id>
+set -euo pipefail
+if [ $# -ne 1 ]; then
+  echo "usage: forge-agent-join <join-token>" >&2
+  exit 2
+fi
+umask 077
+printf 'JOIN_TOKEN=%%s\n' "$1" >/etc/spire/agent-join-token
+systemctl daemon-reload
+systemctl enable --now spire-agent
+systemctl is-active --quiet spire-agent && echo "spire-agent started"
+HELPER
+chmod 0755 /usr/local/bin/forge-agent-join
+
+systemctl daemon-reload
+# Not started: waits for forge-agent-join to supply the token.
+`, version, spireInstallFragment("spire-agent"), agentHCL)
 }

@@ -174,5 +174,20 @@ func spireGCPStartupScript(args *SPIREServerArgs) (string, error) {
 		return "", err
 	}
 
-	return spire.RenderServerStartupScript(args.SPIREVersion, serverHCL, "/dev/disk/by-id/google-spire-data"), nil
+	script := spire.RenderServerStartupScript(args.SPIREVersion, serverHCL, "/dev/disk/by-id/google-spire-data")
+
+	// The agent is co-located with the server: it is what mints the JWT-SVID the
+	// cross-cloud proof validates, and a separate VM would add cost without
+	// changing what is being demonstrated. It talks to the server over loopback,
+	// which is also why insecure_bootstrap is acceptable here — the trust bundle
+	// is fetched from a server on the same host, not across a network.
+	agentHCL, err := spire.RenderAgentHCL(spire.AgentConfig{
+		TrustDomain:       args.TrustDomain,
+		ServerAddress:     "127.0.0.1",
+		InsecureBootstrap: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("agent config: %w", err)
+	}
+	return script + "\n" + spire.RenderAgentStartupScript(args.SPIREVersion, agentHCL), nil
 }

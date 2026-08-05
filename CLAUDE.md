@@ -141,7 +141,7 @@ pkg/attestation/        → trust.go, bundle.go, validate.go (SPIFFE federation 
 pkg/orchestration/      → server.go: HTTP server for /validate and /healthz endpoints
 pkg/authz/              → authz.go: Cedar-based ABAC authorization
 pkg/policies/           → policy.go, gcp.go, aws.go: infrastructure policy checks
-pkg/spire/              → config.go: renders federation-aware SPIRE server/agent HCL (shared by VM scripts + demo)
+pkg/spire/              → config.go: renders federation-aware SPIRE server/agent HCL plus both VM startup scripts (shared by VM scripts + demo)
 demo/                   → local cross-cloud federation proof (gen, certs, bootstrap, run.sh, compose)
 policies/examples/      → Example Cedar policies for cross-cloud access control
 ```
@@ -178,6 +178,24 @@ Packet forwarding must be enabled on both gateways or they silently drop routed 
 `pkg/wireguard` is deliberately cloud-agnostic and the SPIRE components know nothing about it — the transport is meant to be swappable for a Bowtie mesh later.
 
 **The private keys currently reach the hosts through instance metadata**, which is readable via IMDS by anything on the box. That is a known POC-grade shortcut; the TODO to move them into SSM Parameter Store / GCP Secret Manager is tracked and should land before this is anything but a proof.
+
+### SPIRE agent and the bootstrap sequence
+
+The agent is **co-located on the GCP SPIRE server VM**. It is what mints the JWT-SVID the cross-cloud proof validates; a separate VM would add cost without changing what is demonstrated. It reaches the server over loopback, which is also why `insecure_bootstrap` is acceptable — the trust bundle comes from a server on the same host, not across a network.
+
+Provisioning installs the agent, its config, and a systemd unit, but **deliberately does not start it**. A join token is single-use and minted by the server at bootstrap time, so it cannot be baked in at deploy time — and putting it in instance metadata would expose it via IMDS. The unit carries `ConditionPathExists` on an `EnvironmentFile` that does not exist until an operator runs the generated helper:
+
+```bash
+forge-agent-join <token>
+```
+
+The live bootstrap, the analogue of `demo/bootstrap.sh`, is deliberately **manual and not automated**. Run it once by hand over SSM (AWS) or IAP (GCP) and keep the transcript — that transcript is the spec for any later automation, and the steps cannot be designed correctly before watching them work against real infrastructure:
+
+1. Confirm both servers are healthy (`spire-server healthcheck`).
+2. Exchange trust bundles both directions (`bundle show -format spiffe` → `bundle set`). This must happen **before** the first endpoint fetch: `https_spiffe` validates the peer endpoint against a bundle it already holds.
+3. Mint a join token on the GCP server (`token generate -spiffeID <agent-id>`), then `forge-agent-join <token>` on that host.
+4. Create the workload registration entry **with `-federatesWith <aws-trust-domain>`**. Without that flag the SVID carries no federated audience and the peer rejects it.
+5. Mint a JWT-SVID with the AWS trust domain as audience and POST it to `forge serve` on the AWS side.
 
 ### Federation addressing and the bundle endpoint profile
 

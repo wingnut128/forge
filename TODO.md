@@ -29,6 +29,9 @@
 - [x] Cross-cloud private transport — WireGuard point-to-point tunnel (`enable-vpn`), GCE gateway VM ↔ AWS fck-nat instance, so SPIRE is reachable only over the VPN
 - [x] Repoint `PeerBundleEndpointURL` at the peer's pinned private IP, routed over the tunnel (was `https://<peer-trust-domain>:8443`, which resolved to nothing)
 - [x] Switch the bundle endpoint to the `https_spiffe` profile — no serving cert, CA, or key distribution needed
+- [x] Provision a SPIRE agent live — co-located on the GCP SPIRE server VM, installed but not started; `forge-agent-join <token>` supplies the single-use join token at bootstrap
+- [ ] Provision `forge serve` on the AWS side — nothing runs it today, so there is no validator endpoint for the proof
+- [ ] Run the live bootstrap by hand (bundle exchange → join token → `-federatesWith` entry → mint + validate) and capture the transcript before automating any of it
 - [ ] Post-provision SPIRE bootstrap — Phase 2 live: wire bootstrap against live GCP/AWS VMs, real upstream CA, cloud-native node attestors
 - [ ] Bowtie licensing + initial admin bootstrap automation
 - [ ] Provision instance secrets from a secret store rather than instance metadata — AWS SSM Parameter Store and GCP Secret Manager, read at boot via the instance profile / service account. Applies to the WireGuard private keys (currently in userdata, so readable via IMDS by anything on the box) and to the SPIRE bundle-endpoint serving key when F-01 lands.

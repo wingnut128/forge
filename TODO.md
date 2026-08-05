@@ -20,6 +20,8 @@
 - [x] Well-architected VPCs (Cloud NAT / NAT Gateway, multi-AZ, mgmt subnet)
 - [x] Cheap VM-based SPIRE server track (GCE + EC2, disk-backed state)
 - [x] Bowtie controller infrastructure (one VM per CSP, admin firewall)
+- [x] Feature-flag the Bowtie controllers behind `enable-bowtie` (default false) — they sit outside the SPIFFE trust claim and cost ~$37/mo
+- [ ] Right-size the Bowtie VMs if `enable-bowtie` is ever used: vendor minimum is 2 cores / 4 GB RAM / 50 GB disk, but the defaults are `e2-small` / `t3.small` (2 GB) with 20 GB disks
 - [x] Feature-flagged managed state (Cloud SQL + RDS + KMS + Secret Manager)
 - [x] Post-provision SPIRE bootstrap — **Phase 1 local proof complete** (verified live via `make demo` on Apple `container`; MR !51): federation bundle exchange, registration entry, agent join token, GCP-minted JWT-SVID validated on the AWS-role `forge serve`
 - [ ] Post-provision SPIRE bootstrap — Phase 2 live: wire bootstrap against live GCP/AWS VMs, real upstream CA, cloud-native node attestors

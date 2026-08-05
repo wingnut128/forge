@@ -96,12 +96,13 @@ Set via `pulumi config set forge:<key> <value>`:
 | `enable-eks` | no | false (opt in to EKS control plane + node group) |
 | `enable-managed-state` | no | false (opt in to Cloud SQL + RDS + KMS + Secret Manager) |
 | `enable-multi-az-nat` | no | false (when false, single NAT Gateway serves both AZs) |
+| `enable-bowtie` | no | false (opt in to the Bowtie controller VM per cloud) |
 | `gke-node-count` | no | 3 |
 | `gke-machine-type` | no | e2-standard-4 |
 | `eks-node-count` | no | 3 |
 | `eks-instance-type` | no | t3.medium |
-| `bowtie-gcp-image` | yes | — (Bowtie controller image self-link) |
-| `bowtie-aws-ami` | yes | — (Bowtie controller AMI) |
+| `bowtie-gcp-image` | conditional | — (image self-link, e.g. `projects/bowtie-works/global/images/bowtie-controller-gce-efi-<version>`; required when `enable-bowtie=true`) |
+| `bowtie-aws-ami` | conditional | — (Bowtie controller AMI, owner account `055761336000`; required when `enable-bowtie=true`) |
 | `bowtie-admin-cidrs` | no | [] (list of CIDRs allowed to reach Bowtie admin ports; empty = locked to 127.0.0.1/32) |
 | `spire-server-version` | no | 1.11.2 |
 | `spire-db-password` | conditional | — (pulumi config set --secret; required when `enable-managed-state=true`) |
@@ -158,7 +159,9 @@ AWS URNs: `forge:aws:VPC`, `forge:aws:EKSCluster`, `forge:aws:SPIREOIDCProvider`
 - **GCP foundation**: Network (VPC + mgmt subnet + Cloud NAT) → optionally GKECluster + WorkloadIdentity → optionally ManagedState → SPIREServer VM → BowtieController VM
 - **AWS foundation**: VPC (private/public subnets + IGW + NAT) → optionally EKSCluster + SPIREOIDCProvider → optionally ManagedState → SPIREServer EC2 → BowtieController EC2
 
-The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s or managed-state paths.
+The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`, `enable-bowtie=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s, managed-state, or Bowtie paths.
+
+`enable-bowtie` gates both controller VMs. The Bowtie mesh is orthogonal to the SPIFFE trust claim the POC proves, so it stays off by default — enabling it costs roughly $37/month across both clouds and requires `bowtie-gcp-image` and `bowtie-aws-ami`. Note the vendor minimum is 2 cores / 4 GB RAM / 50 GB disk, which the current `e2-small` / `t3.small` and 20 GB disk defaults do not meet.
 
 ### Authorization Model
 

@@ -273,6 +273,9 @@ func spireServerPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, network
 }
 
 func bowtieControllerPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, network *gcp.Network, awsVPC *awscomp.VPC) error {
+	if !cfg.EnableBowtie {
+		return nil
+	}
 	if _, err := gcp.NewBowtieController(ctx, "forge-gcp-bowtie", &gcp.BowtieControllerArgs{
 		Environment:    cfg.Environment,
 		Region:         cfg.GCPRegion,

@@ -42,7 +42,8 @@ forge/
 
 | Flags | What you get | Rough monthly floor |
 |---|---|---|
-| (defaults) | 2 VPCs + NAT + 2 SPIRE VMs (e2-small / t3.small) + 2 Bowtie VMs | ~$35-50 |
+| (defaults) | 2 VPCs + NAT + 2 SPIRE VMs (e2-small / t3.small) | ~$70 |
+| `enable-bowtie=true` | Above + 2 Bowtie controller VMs + 2 static IPs | adds ~$37 |
 | `enable-managed-state=true` | Above + Cloud SQL db-f1-micro + RDS db.t4g.micro + KMS keys | ~$75-110 |
 | `enable-gke=true,enable-eks=true` | Above + full GKE and EKS control planes/node groups | ~$250+ |
 | `enable-multi-az-nat=true` | One NAT Gateway per AZ instead of a single shared one | adds ~$35 |

@@ -14,7 +14,7 @@ type BowtieControllerArgs struct {
 	Zone           string
 	MgmtSubnetLink pulumi.StringOutput
 	VPCID          pulumi.IDOutput
-	Image          string // e.g. projects/bowtie-public/global/images/bowtie-controller-*
+	Image          string // e.g. projects/bowtie-works/global/images/bowtie-controller-gce-efi-<version>
 	MachineType    string // default: e2-small
 	AdminCIDRs     []string
 }

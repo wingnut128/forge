@@ -235,9 +235,16 @@ if [ ! -x /usr/local/bin/spire-server ]; then
   cd /tmp
   SPIRE_PKG="spire-${SPIRE_VERSION}-linux-amd64-musl.tar.gz"
   SPIRE_BASE="https://github.com/spiffe/spire/releases/download/v${SPIRE_VERSION}"
-  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 3 \
+  # Retry generously: this VM may boot before the NAT instance finishes
+  # bringing up iptables (~20-30s). curl's default backoff gives up in ~7s,
+  # and with 'set -euo pipefail' a failed download aborts the whole script.
+  # --retry-all-errors is required because connection refused/timeout is not
+  # one of curl's default "transient" retry conditions.
+  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+    --retry 10 --retry-delay 5 --retry-all-errors \
     -o "${SPIRE_PKG}" "${SPIRE_BASE}/${SPIRE_PKG}"
-  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --retry 3 \
+  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+    --retry 10 --retry-delay 5 --retry-all-errors \
     -o "${SPIRE_PKG%%.tar.gz}_sha256sum.txt" "${SPIRE_BASE}/${SPIRE_PKG%%.tar.gz}_sha256sum.txt"
   # Fail closed if the published checksum does not match the downloaded archive.
   sha256sum -c "${SPIRE_PKG%%.tar.gz}_sha256sum.txt"

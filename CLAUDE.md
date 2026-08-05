@@ -95,13 +95,14 @@ Set via `pulumi config set forge:<key> <value>`:
 | `enable-gke` | no | false (opt in to GKE control plane + node pool) |
 | `enable-eks` | no | false (opt in to EKS control plane + node group) |
 | `enable-managed-state` | no | false (opt in to Cloud SQL + RDS + KMS + Secret Manager) |
-| `enable-multi-az-nat` | no | false (when false, single NAT Gateway serves both AZs) |
+| `enable-multi-az-nat` | no | false (when false, a single NAT instance serves both AZs) |
+| `enable-bowtie` | no | false (opt in to the Bowtie controller VM per cloud) |
 | `gke-node-count` | no | 3 |
 | `gke-machine-type` | no | e2-standard-4 |
 | `eks-node-count` | no | 3 |
 | `eks-instance-type` | no | t3.medium |
-| `bowtie-gcp-image` | yes | — (Bowtie controller image self-link) |
-| `bowtie-aws-ami` | yes | — (Bowtie controller AMI) |
+| `bowtie-gcp-image` | conditional | — (image self-link, e.g. `projects/bowtie-works/global/images/bowtie-controller-gce-efi-<version>`; required when `enable-bowtie=true`) |
+| `bowtie-aws-ami` | conditional | — (Bowtie controller AMI, owner account `055761336000`; required when `enable-bowtie=true`) |
 | `bowtie-admin-cidrs` | no | [] (list of CIDRs allowed to reach Bowtie admin ports; empty = locked to 127.0.0.1/32) |
 | `spire-server-version` | no | 1.11.2 |
 | `spire-db-password` | conditional | — (pulumi config set --secret; required when `enable-managed-state=true`) |
@@ -129,7 +130,7 @@ cmd/forge/              → main.go: thin CLI entrypoint (os.Args dispatch + Aut
 pkg/config/             → config.go: loads and validates ForgeConfig from Pulumi stack config
 pkg/components/gcp/     → network.go, gke.go, workload_identity.go,
                           spire_server.go, bowtie.go, managed_state.go (GCP Pulumi components)
-pkg/components/aws/     → vpc.go, eks.go, spire_oidc.go, spire_server.go, bowtie.go, managed_state.go (AWS Pulumi components)
+pkg/components/aws/     → vpc.go, fcknat.go, eks.go, spire_oidc.go, spire_server.go, bowtie.go, managed_state.go (AWS Pulumi components)
 pkg/attestation/        → trust.go, bundle.go, validate.go (SPIFFE federation + JWT-SVID validation)
 pkg/orchestration/      → server.go: HTTP server for /validate and /healthz endpoints
 pkg/authz/              → authz.go: Cedar-based ABAC authorization
@@ -156,9 +157,27 @@ AWS URNs: `forge:aws:VPC`, `forge:aws:EKSCluster`, `forge:aws:SPIREOIDCProvider`
 
 `deployFunc` in `main.go` runs policy checks first, then chains:
 - **GCP foundation**: Network (VPC + mgmt subnet + Cloud NAT) → optionally GKECluster + WorkloadIdentity → optionally ManagedState → SPIREServer VM → BowtieController VM
-- **AWS foundation**: VPC (private/public subnets + IGW + NAT) → optionally EKSCluster + SPIREOIDCProvider → optionally ManagedState → SPIREServer EC2 → BowtieController EC2
+- **AWS foundation**: VPC (private/public subnets + IGW + fck-nat) → optionally EKSCluster + SPIREOIDCProvider → optionally ManagedState → SPIREServer EC2 → BowtieController EC2
 
-The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s or managed-state paths.
+### AWS egress: fck-nat, not NAT Gateway
+
+Private-subnet egress runs through [fck-nat](https://fck-nat.dev) NAT instances (`pkg/components/aws/fcknat.go`) instead of a managed NAT Gateway — roughly $10/month against $36.50, and the SPIRE server's only real egress need is a one-time ~30 MB download at boot.
+
+Each fleet is an ASG pinned to `min=max=desired=1`: a self-healing single instance, not a scaled fleet. Routing targets a **persistent ENI**, not the instance, so a replacement instance re-attaches the same ENI and the route tables never change — no Lambda, no route rewriting.
+
+Two things that will silently break it if changed:
+- `SourceDestCheck` must stay `false` on the ENI, or the kernel drops every forwarded packet with no error and no log.
+- The NAT security group must only admit the VPC CIDR. A `0.0.0.0/0` ingress rule turns it into an open relay.
+
+The AMI is discovered via `LookupAmi` against owner `568608671756`, name `fck-nat-al2023-*`, architecture `arm64`. Override with `FckNatAMIOwner` / `FckNatAMINamePattern` / `FckNatAMIArchitecture` on `VPCArgs` if the vendor rotates any of them.
+
+Both the NAT instances and the SPIRE server EC2 carry an instance profile with `AmazonSSMManagedInstanceCore`. Neither has a key pair and both sit behind private routing, so SSM Session Manager is the only way onto either box — without it, a failed boot is undiagnosable. The SPIRE server's download also retries for ~50s (`--retry 10 --retry-delay 5 --retry-all-errors`) because it can boot before the NAT instance has finished bringing up iptables.
+
+**The architecture filter is load-bearing.** The name pattern matches both architectures, and fck-nat publishes the x86_64 image a few minutes ahead of arm64 — so `MostRecent` without an architecture filter selects x86_64 and hands it to a `t4g.nano`, which fails to boot. If you change `NATInstanceType` to an x86 type, change `FckNatAMIArchitecture` to `x86_64` in the same edit.
+
+The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`, `enable-bowtie=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s, managed-state, or Bowtie paths.
+
+`enable-bowtie` gates both controller VMs. The Bowtie mesh is orthogonal to the SPIFFE trust claim the POC proves, so it stays off by default — enabling it requires `bowtie-gcp-image` and `bowtie-aws-ami`. The VMs are sized to the documented vendor minimum and no higher (2 cores / 4 GB RAM / 50 GB disk → `e2-medium` + `t3.medium`), which costs roughly $60/month across both clouds.
 
 ### Authorization Model
 

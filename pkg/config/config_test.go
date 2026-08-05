@@ -69,8 +69,8 @@ func TestNewForgeConfig_Defaults(t *testing.T) {
 	if cfg.SPIREServerVersion != DefaultSPIREServerVersion {
 		t.Errorf("SPIREServerVersion = %q", cfg.SPIREServerVersion)
 	}
-	if cfg.EnableGKE || cfg.EnableEKS || cfg.EnableManagedState {
-		t.Errorf("enable flags should default false: gke=%v eks=%v managed=%v", cfg.EnableGKE, cfg.EnableEKS, cfg.EnableManagedState)
+	if cfg.EnableGKE || cfg.EnableEKS || cfg.EnableManagedState || cfg.EnableBowtie {
+		t.Errorf("enable flags should default false: gke=%v eks=%v managed=%v bowtie=%v", cfg.EnableGKE, cfg.EnableEKS, cfg.EnableManagedState, cfg.EnableBowtie)
 	}
 }
 
@@ -106,8 +106,9 @@ func TestNewForgeConfig_EnableFlagsPassthrough(t *testing.T) {
 	in.EnableEKS = true
 	in.EnableManagedState = true
 	in.EnableMultiAZNAT = true
+	in.EnableBowtie = true
 	cfg := mustConfig(t, in)
-	if !cfg.EnableGKE || !cfg.EnableEKS || !cfg.EnableManagedState || !cfg.EnableMultiAZNAT {
+	if !cfg.EnableGKE || !cfg.EnableEKS || !cfg.EnableManagedState || !cfg.EnableMultiAZNAT || !cfg.EnableBowtie {
 		t.Errorf("enable flags not passed through: %+v", cfg)
 	}
 }

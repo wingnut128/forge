@@ -47,6 +47,7 @@ type ForgeConfig struct {
 	EnableEKS          bool
 	EnableManagedState bool
 	EnableMultiAZNAT   bool
+	EnableBowtie       bool
 
 	BowtieAdminCIDRs []string
 	BowtieGCPImage   string
@@ -81,6 +82,7 @@ type ConfigInput struct {
 	EnableEKS          bool
 	EnableManagedState bool
 	EnableMultiAZNAT   bool
+	EnableBowtie       bool
 
 	BowtieAdminCIDRs []string
 	BowtieGCPImage   string
@@ -114,6 +116,7 @@ func Load(ctx *pulumi.Context) (*ForgeConfig, error) {
 		EnableEKS:           cfg.GetBool("enable-eks"),
 		EnableManagedState:  cfg.GetBool("enable-managed-state"),
 		EnableMultiAZNAT:    cfg.GetBool("enable-multi-az-nat"),
+		EnableBowtie:        cfg.GetBool("enable-bowtie"),
 		BowtieAdminCIDRs:    adminCIDRs,
 		BowtieGCPImage:      cfg.Get("bowtie-gcp-image"),
 		BowtieAWSAMI:        cfg.Get("bowtie-aws-ami"),
@@ -163,6 +166,7 @@ func NewForgeConfig(in ConfigInput) (*ForgeConfig, error) {
 		EnableEKS:           in.EnableEKS,
 		EnableManagedState:  in.EnableManagedState,
 		EnableMultiAZNAT:    in.EnableMultiAZNAT,
+		EnableBowtie:        in.EnableBowtie,
 		BowtieAdminCIDRs:    in.BowtieAdminCIDRs,
 		BowtieGCPImage:      in.BowtieGCPImage,
 		BowtieAWSAMI:        in.BowtieAWSAMI,

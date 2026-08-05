@@ -142,23 +142,40 @@ func TestDeployFunc_DefaultCreatesCheapTrack(t *testing.T) {
 		t.Fatalf("deployFunc failed: %v", err)
 	}
 
-	// Default track: VPCs + SPIRE VMs + Bowtie controllers, no K8s, no managed state.
+	// Default track: VPCs + SPIRE VMs only. No K8s, no managed state, no Bowtie.
 	for _, expected := range []string{
 		"forge-dev-vpc",
 		"forge-dev-mgmt-subnet",
 		"forge-dev-spire-server",
-		"forge-dev-bowtie",
 		"forge-dev-public-a",
-		"forge-dev-nat-a",
+		"forge-dev-fcknat-a-asg",
+		"forge-dev-fcknat-a-eni",
 	} {
 		if !mock.hasResource(expected) {
 			t.Errorf("expected resource containing %q, got %v", expected, mock.names)
 		}
 	}
-	for _, notExpected := range []string{"forge-dev-gke", "forge-dev-eks", "forge-dev-spire-sql", "forge-dev-spire-db"} {
+	for _, notExpected := range []string{"forge-dev-gke", "forge-dev-eks", "forge-dev-spire-sql", "forge-dev-spire-db", "forge-dev-bowtie"} {
 		if mock.hasResource(notExpected) {
-			t.Errorf("did not expect %q when enable-gke/eks/managed-state are off", notExpected)
+			t.Errorf("did not expect %q when enable-gke/eks/managed-state/bowtie are off", notExpected)
 		}
+	}
+}
+
+func TestDeployFunc_EnableBowtie(t *testing.T) {
+	cfg := strings.TrimSuffix(baseDeployConfig, "}") + `,"forge:enable-bowtie":"true"}`
+	t.Setenv("PULUMI_CONFIG", cfg)
+
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return deployFunc(ctx)
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("deployFunc failed: %v", err)
+	}
+
+	if !mock.hasResource("forge-dev-bowtie") {
+		t.Errorf("expected Bowtie controllers when enable-bowtie is set, got %v", mock.names)
 	}
 }
 
@@ -229,7 +246,8 @@ func TestDeployFunc_MissingBowtieGCPImage(t *testing.T) {
 		"forge:spire-trust-domain":"gcp.example.com",
 		"forge:aws-spire-trust-domain":"aws.example.com",
 		"forge:spire-aws-ami":"ami-0123456789abcdef0",
-		"forge:bowtie-aws-ami":"ami-bowtie0000000000"
+		"forge:bowtie-aws-ami":"ami-bowtie0000000000",
+		"forge:enable-bowtie":"true"
 	}`
 	t.Setenv("PULUMI_CONFIG", cfg)
 
@@ -250,7 +268,8 @@ func TestDeployFunc_MissingBowtieAWSAMI(t *testing.T) {
 		"forge:spire-trust-domain":"gcp.example.com",
 		"forge:aws-spire-trust-domain":"aws.example.com",
 		"forge:spire-aws-ami":"ami-0123456789abcdef0",
-		"forge:bowtie-gcp-image":"projects/bowtie/global/images/bowtie-1-0-0"
+		"forge:bowtie-gcp-image":"projects/bowtie/global/images/bowtie-1-0-0",
+		"forge:enable-bowtie":"true"
 	}`
 	t.Setenv("PULUMI_CONFIG", cfg)
 

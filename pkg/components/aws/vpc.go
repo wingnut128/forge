@@ -7,19 +7,32 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
+// vpcCIDR is the AWS-side address space, chosen not to overlap GCP's 10.0.0.0/20.
+const vpcCIDR = "10.1.0.0/16"
+
 // VPCArgs configures the AWS VPC component.
 type VPCArgs struct {
 	Environment string
 	Region      string
-	// MultiAZNAT provisions a NAT Gateway per AZ. When false (default), a single
-	// NAT Gateway in AZ a serves both private subnets to save cost.
+	// MultiAZNAT provisions a NAT instance per AZ. When false (default), a
+	// single NAT instance in AZ a serves both private subnets to save cost.
 	MultiAZNAT bool
+	// NATInstanceType overrides the fck-nat instance size (default t4g.nano).
+	NATInstanceType string
+	// FckNatAMIOwner, FckNatAMINamePattern, and FckNatAMIArchitecture override
+	// AMI discovery if the vendor rotates its publishing account or image
+	// naming. The architecture must match NATInstanceType: the default arm64
+	// suits t4g, and switching to an x86 instance type requires setting this
+	// to "x86_64" as well.
+	FckNatAMIOwner        string
+	FckNatAMINamePattern  string
+	FckNatAMIArchitecture string
 }
 
 // VPC is a Pulumi component resource that provisions an AWS VPC with:
 //   - two private subnets across AZs a and b (for workloads)
 //   - two public subnets across AZs a and b (for NAT + Bowtie controller)
-//   - Internet Gateway and NAT Gateway(s) with appropriate routing
+//   - Internet Gateway and self-healing fck-nat instance(s) with routing
 type VPC struct {
 	pulumi.ResourceState
 
@@ -29,7 +42,7 @@ type VPC struct {
 	InternalSGID    pulumi.IDOutput
 }
 
-// NewVPC creates the VPC, subnets, IGW, NAT gateways, route tables, and security group.
+// NewVPC creates the VPC, subnets, IGW, NAT instances, route tables, and security group.
 func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.ResourceOption) (*VPC, error) {
 	if args == nil {
 		return nil, fmt.Errorf("args must not be nil")
@@ -44,7 +57,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 	namePrefix := fmt.Sprintf("forge-%s", args.Environment)
 
 	vpc, err := ec2.NewVpc(ctx, namePrefix+"-vpc", &ec2.VpcArgs{
-		CidrBlock:          pulumi.String("10.1.0.0/16"),
+		CidrBlock:          pulumi.String(vpcCIDR),
 		EnableDnsSupport:   pulumi.Bool(true),
 		EnableDnsHostnames: pulumi.Bool(true),
 		Tags: pulumi.StringMap{
@@ -144,18 +157,17 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 		}
 	}
 
-	// NAT Gateway(s) — single by default, per-AZ if MultiAZNAT is set.
-	natEIPa, err := ec2.NewEip(ctx, namePrefix+"-eip-nat-a", &ec2.EipArgs{
-		Domain: pulumi.String("vpc"),
-		Tags:   pulumi.StringMap{"Name": pulumi.String(namePrefix + "-eip-nat-a")},
-	}, parentOpt)
-	if err != nil {
-		return nil, err
-	}
-	natA, err := ec2.NewNatGateway(ctx, namePrefix+"-nat-a", &ec2.NatGatewayArgs{
-		AllocationId: natEIPa.ID(),
-		SubnetId:     publicSubnetA.ID(),
-		Tags:         pulumi.StringMap{"Name": pulumi.String(namePrefix + "-nat-a")},
+	// NAT instance fleet(s) — single by default, per-AZ if MultiAZNAT is set.
+	natA, err := newFckNat(ctx, fckNatArgs{
+		namePrefix:     namePrefix,
+		suffix:         "a",
+		vpcID:          vpc.ID(),
+		vpcCIDR:        vpcCIDR,
+		publicSubnetID: publicSubnetA.ID(),
+		instanceType:   args.NATInstanceType,
+		amiOwner:       args.FckNatAMIOwner,
+		amiNamePattern: args.FckNatAMINamePattern,
+		amiArch:        args.FckNatAMIArchitecture,
 	}, pulumi.Parent(component), pulumi.DependsOn([]pulumi.Resource{igw}))
 	if err != nil {
 		return nil, err
@@ -166,8 +178,8 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 		VpcId: vpc.ID(),
 		Routes: ec2.RouteTableRouteArray{
 			&ec2.RouteTableRouteArgs{
-				CidrBlock:    pulumi.String("0.0.0.0/0"),
-				NatGatewayId: natA.ID(),
+				CidrBlock:          pulumi.String("0.0.0.0/0"),
+				NetworkInterfaceId: natA.RoutingENIID,
 			},
 		},
 		Tags: pulumi.StringMap{"Name": pulumi.String(namePrefix + "-rt-private-a")},
@@ -184,32 +196,31 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 	}
 
 	// Subnet B: either its own NAT (MultiAZNAT) or reuse NAT A.
-	privateNatBID := natA.ID()
+	privateNatBENI := natA.RoutingENIID
 	if args.MultiAZNAT {
-		natEIPb, err := ec2.NewEip(ctx, namePrefix+"-eip-nat-b", &ec2.EipArgs{
-			Domain: pulumi.String("vpc"),
-			Tags:   pulumi.StringMap{"Name": pulumi.String(namePrefix + "-eip-nat-b")},
-		}, parentOpt)
-		if err != nil {
-			return nil, err
-		}
-		natB, err := ec2.NewNatGateway(ctx, namePrefix+"-nat-b", &ec2.NatGatewayArgs{
-			AllocationId: natEIPb.ID(),
-			SubnetId:     publicSubnetB.ID(),
-			Tags:         pulumi.StringMap{"Name": pulumi.String(namePrefix + "-nat-b")},
+		natB, err := newFckNat(ctx, fckNatArgs{
+			namePrefix:     namePrefix,
+			suffix:         "b",
+			vpcID:          vpc.ID(),
+			vpcCIDR:        vpcCIDR,
+			publicSubnetID: publicSubnetB.ID(),
+			instanceType:   args.NATInstanceType,
+			amiOwner:       args.FckNatAMIOwner,
+			amiNamePattern: args.FckNatAMINamePattern,
+			amiArch:        args.FckNatAMIArchitecture,
 		}, pulumi.Parent(component), pulumi.DependsOn([]pulumi.Resource{igw}))
 		if err != nil {
 			return nil, err
 		}
-		privateNatBID = natB.ID()
+		privateNatBENI = natB.RoutingENIID
 	}
 
 	privateRTB, err := ec2.NewRouteTable(ctx, namePrefix+"-rt-private-b", &ec2.RouteTableArgs{
 		VpcId: vpc.ID(),
 		Routes: ec2.RouteTableRouteArray{
 			&ec2.RouteTableRouteArgs{
-				CidrBlock:    pulumi.String("0.0.0.0/0"),
-				NatGatewayId: privateNatBID,
+				CidrBlock:          pulumi.String("0.0.0.0/0"),
+				NetworkInterfaceId: privateNatBENI,
 			},
 		},
 		Tags: pulumi.StringMap{"Name": pulumi.String(namePrefix + "-rt-private-b")},
@@ -233,7 +244,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 				Protocol:   pulumi.String("-1"),
 				FromPort:   pulumi.Int(0),
 				ToPort:     pulumi.Int(0),
-				CidrBlocks: pulumi.StringArray{pulumi.String("10.1.0.0/16")},
+				CidrBlocks: pulumi.StringArray{pulumi.String(vpcCIDR)},
 			},
 		},
 		Egress: ec2.SecurityGroupEgressArray{

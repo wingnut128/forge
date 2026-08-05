@@ -18,8 +18,12 @@
 ## Medium Priority (infrastructure)
 - [ ] Cloud landing zones — optional provisioning of GCP project/org and AWS account/VPC foundation (conditional flag, not always needed)
 - [x] Well-architected VPCs (Cloud NAT / NAT Gateway, multi-AZ, mgmt subnet)
+- [x] Replace the AWS NAT Gateway with a self-healing fck-nat ASG (min=max=1) behind a persistent ENI — ~$36.50/mo → ~$10/mo
+- [x] Verify the fck-nat AMI resolves live (owner `568608671756`, `fck-nat-al2023-*`, arm64 — confirmed against the live EC2 API)
 - [x] Cheap VM-based SPIRE server track (GCE + EC2, disk-backed state)
 - [x] Bowtie controller infrastructure (one VM per CSP, admin firewall)
+- [x] Feature-flag the Bowtie controllers behind `enable-bowtie` (default false) — they sit outside the SPIFFE trust claim and cost ~$37/mo
+- [x] Size the Bowtie VMs to the documented vendor minimum (2 cores / 4 GB / 50 GB): `e2-medium` + `t3.medium`, 50 GB disks
 - [x] Feature-flagged managed state (Cloud SQL + RDS + KMS + Secret Manager)
 - [x] Post-provision SPIRE bootstrap — **Phase 1 local proof complete** (verified live via `make demo` on Apple `container`; MR !51): federation bundle exchange, registration entry, agent join token, GCP-minted JWT-SVID validated on the AWS-role `forge serve`
 - [ ] Post-provision SPIRE bootstrap — Phase 2 live: wire bootstrap against live GCP/AWS VMs, real upstream CA, cloud-native node attestors
@@ -47,7 +51,7 @@
 ### Open (no live-cloud / keystore dependency)
 - [ ] F-02: TLS (ideally mTLS) in front of `forge serve`
 - [ ] F-10: verify policy-file integrity at load
-- [ ] F-14: enforce IMDSv2 on the AWS SPIRE instance
+- [ ] F-14: enforce IMDSv2 on the AWS SPIRE instance (already required on the fck-nat launch template)
 - [ ] F-18: Cloud SQL deletion protection + PITR
 - [ ] F-19: scope SPIRE ingress to the VPC CIDR, not `10.0.0.0/8`
 - [ ] F-20: restrict AWS SPIRE egress

@@ -19,7 +19,7 @@
 - [ ] Cloud landing zones — optional provisioning of GCP project/org and AWS account/VPC foundation (conditional flag, not always needed)
 - [x] Well-architected VPCs (Cloud NAT / NAT Gateway, multi-AZ, mgmt subnet)
 - [x] Replace the AWS NAT Gateway with a self-healing fck-nat ASG (min=max=1) behind a persistent ENI — ~$36.50/mo → ~$10/mo
-- [ ] Verify the fck-nat AMI resolves live: `aws ec2 describe-images --owners 568608671756 --filters 'Name=name,Values=fck-nat-al2023-*'`
+- [x] Verify the fck-nat AMI resolves live (owner `568608671756`, `fck-nat-al2023-*`, arm64 — confirmed against the live EC2 API)
 - [x] Cheap VM-based SPIRE server track (GCE + EC2, disk-backed state)
 - [x] Bowtie controller infrastructure (one VM per CSP, admin firewall)
 - [x] Feature-flag the Bowtie controllers behind `enable-bowtie` (default false) — they sit outside the SPIFFE trust claim and cost ~$37/mo

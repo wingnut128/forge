@@ -19,10 +19,14 @@ type VPCArgs struct {
 	MultiAZNAT bool
 	// NATInstanceType overrides the fck-nat instance size (default t4g.nano).
 	NATInstanceType string
-	// FckNatAMIOwner and FckNatAMINamePattern override AMI discovery if the
-	// vendor rotates its publishing account or image naming.
-	FckNatAMIOwner       string
-	FckNatAMINamePattern string
+	// FckNatAMIOwner, FckNatAMINamePattern, and FckNatAMIArchitecture override
+	// AMI discovery if the vendor rotates its publishing account or image
+	// naming. The architecture must match NATInstanceType: the default arm64
+	// suits t4g, and switching to an x86 instance type requires setting this
+	// to "x86_64" as well.
+	FckNatAMIOwner        string
+	FckNatAMINamePattern  string
+	FckNatAMIArchitecture string
 }
 
 // VPC is a Pulumi component resource that provisions an AWS VPC with:
@@ -163,6 +167,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 		instanceType:   args.NATInstanceType,
 		amiOwner:       args.FckNatAMIOwner,
 		amiNamePattern: args.FckNatAMINamePattern,
+		amiArch:        args.FckNatAMIArchitecture,
 	}, pulumi.Parent(component), pulumi.DependsOn([]pulumi.Resource{igw}))
 	if err != nil {
 		return nil, err
@@ -202,6 +207,7 @@ func NewVPC(ctx *pulumi.Context, name string, args *VPCArgs, opts ...pulumi.Reso
 			instanceType:   args.NATInstanceType,
 			amiOwner:       args.FckNatAMIOwner,
 			amiNamePattern: args.FckNatAMINamePattern,
+			amiArch:        args.FckNatAMIArchitecture,
 		}, pulumi.Parent(component), pulumi.DependsOn([]pulumi.Resource{igw}))
 		if err != nil {
 			return nil, err

@@ -169,7 +169,9 @@ Two things that will silently break it if changed:
 - `SourceDestCheck` must stay `false` on the ENI, or the kernel drops every forwarded packet with no error and no log.
 - The NAT security group must only admit the VPC CIDR. A `0.0.0.0/0` ingress rule turns it into an open relay.
 
-The AMI is discovered via `LookupAmi` against owner `568608671756`, name `fck-nat-al2023-*`; override with `FckNatAMIOwner` / `FckNatAMINamePattern` on `VPCArgs` if the vendor rotates either.
+The AMI is discovered via `LookupAmi` against owner `568608671756`, name `fck-nat-al2023-*`, architecture `arm64`. Override with `FckNatAMIOwner` / `FckNatAMINamePattern` / `FckNatAMIArchitecture` on `VPCArgs` if the vendor rotates any of them.
+
+**The architecture filter is load-bearing.** The name pattern matches both architectures, and fck-nat publishes the x86_64 image a few minutes ahead of arm64 — so `MostRecent` without an architecture filter selects x86_64 and hands it to a `t4g.nano`, which fails to boot. If you change `NATInstanceType` to an x86 type, change `FckNatAMIArchitecture` to `x86_64` in the same edit.
 
 The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`, `enable-bowtie=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s, managed-state, or Bowtie paths.
 

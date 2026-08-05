@@ -17,6 +17,10 @@ const (
 	DefaultFckNatAMIOwner       = "568608671756"
 	DefaultFckNatAMINamePattern = "fck-nat-al2023-*"
 	DefaultFckNatInstanceType   = "t4g.nano"
+	// The name pattern matches both architectures, and x86_64 images are
+	// published slightly ahead of arm64 — so MostRecent alone would hand a
+	// t4g (arm64) instance an x86_64 AMI. Filter on architecture explicitly.
+	DefaultFckNatAMIArchitecture = "arm64"
 )
 
 // fckNatArgs configures one NAT instance fleet.
@@ -29,6 +33,7 @@ type fckNatArgs struct {
 	instanceType   string
 	amiOwner       string
 	amiNamePattern string
+	amiArch        string
 }
 
 // fckNat is a NAT instance fleet fronted by a persistent ENI.
@@ -55,6 +60,10 @@ func newFckNat(ctx *pulumi.Context, args fckNatArgs, opts ...pulumi.ResourceOpti
 	amiNamePattern := args.amiNamePattern
 	if amiNamePattern == "" {
 		amiNamePattern = DefaultFckNatAMINamePattern
+	}
+	amiArch := args.amiArch
+	if amiArch == "" {
+		amiArch = DefaultFckNatAMIArchitecture
 	}
 
 	// Only VPC-internal traffic may use the NAT. A 0.0.0.0/0 ingress rule here
@@ -166,10 +175,11 @@ func newFckNat(ctx *pulumi.Context, args fckNatArgs, opts ...pulumi.ResourceOpti
 		Owners:     []string{amiOwner},
 		Filters: []ec2.GetAmiFilter{
 			{Name: "name", Values: []string{amiNamePattern}},
+			{Name: "architecture", Values: []string{amiArch}},
 		},
 	}, nil)
 	if err != nil {
-		return nil, fmt.Errorf("fck-nat ami lookup (owner %s, name %s): %w", amiOwner, amiNamePattern, err)
+		return nil, fmt.Errorf("fck-nat ami lookup (owner %s, name %s, arch %s): %w", amiOwner, amiNamePattern, amiArch, err)
 	}
 
 	// fck-nat reads eni_id from its config file and attaches that ENI at boot.

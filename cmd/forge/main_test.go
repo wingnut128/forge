@@ -148,7 +148,8 @@ func TestDeployFunc_DefaultCreatesCheapTrack(t *testing.T) {
 		"forge-dev-mgmt-subnet",
 		"forge-dev-spire-server",
 		"forge-dev-public-a",
-		"forge-dev-nat-a",
+		"forge-dev-fcknat-a-asg",
+		"forge-dev-fcknat-a-eni",
 	} {
 		if !mock.hasResource(expected) {
 			t.Errorf("expected resource containing %q, got %v", expected, mock.names)

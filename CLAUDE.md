@@ -95,7 +95,7 @@ Set via `pulumi config set forge:<key> <value>`:
 | `enable-gke` | no | false (opt in to GKE control plane + node pool) |
 | `enable-eks` | no | false (opt in to EKS control plane + node group) |
 | `enable-managed-state` | no | false (opt in to Cloud SQL + RDS + KMS + Secret Manager) |
-| `enable-multi-az-nat` | no | false (when false, single NAT Gateway serves both AZs) |
+| `enable-multi-az-nat` | no | false (when false, a single NAT instance serves both AZs) |
 | `enable-bowtie` | no | false (opt in to the Bowtie controller VM per cloud) |
 | `gke-node-count` | no | 3 |
 | `gke-machine-type` | no | e2-standard-4 |
@@ -130,7 +130,7 @@ cmd/forge/              → main.go: thin CLI entrypoint (os.Args dispatch + Aut
 pkg/config/             → config.go: loads and validates ForgeConfig from Pulumi stack config
 pkg/components/gcp/     → network.go, gke.go, workload_identity.go,
                           spire_server.go, bowtie.go, managed_state.go (GCP Pulumi components)
-pkg/components/aws/     → vpc.go, eks.go, spire_oidc.go, spire_server.go, bowtie.go, managed_state.go (AWS Pulumi components)
+pkg/components/aws/     → vpc.go, fcknat.go, eks.go, spire_oidc.go, spire_server.go, bowtie.go, managed_state.go (AWS Pulumi components)
 pkg/attestation/        → trust.go, bundle.go, validate.go (SPIFFE federation + JWT-SVID validation)
 pkg/orchestration/      → server.go: HTTP server for /validate and /healthz endpoints
 pkg/authz/              → authz.go: Cedar-based ABAC authorization
@@ -157,7 +157,19 @@ AWS URNs: `forge:aws:VPC`, `forge:aws:EKSCluster`, `forge:aws:SPIREOIDCProvider`
 
 `deployFunc` in `main.go` runs policy checks first, then chains:
 - **GCP foundation**: Network (VPC + mgmt subnet + Cloud NAT) → optionally GKECluster + WorkloadIdentity → optionally ManagedState → SPIREServer VM → BowtieController VM
-- **AWS foundation**: VPC (private/public subnets + IGW + NAT) → optionally EKSCluster + SPIREOIDCProvider → optionally ManagedState → SPIREServer EC2 → BowtieController EC2
+- **AWS foundation**: VPC (private/public subnets + IGW + fck-nat) → optionally EKSCluster + SPIREOIDCProvider → optionally ManagedState → SPIREServer EC2 → BowtieController EC2
+
+### AWS egress: fck-nat, not NAT Gateway
+
+Private-subnet egress runs through [fck-nat](https://fck-nat.dev) NAT instances (`pkg/components/aws/fcknat.go`) instead of a managed NAT Gateway — roughly $10/month against $36.50, and the SPIRE server's only real egress need is a one-time ~30 MB download at boot.
+
+Each fleet is an ASG pinned to `min=max=desired=1`: a self-healing single instance, not a scaled fleet. Routing targets a **persistent ENI**, not the instance, so a replacement instance re-attaches the same ENI and the route tables never change — no Lambda, no route rewriting.
+
+Two things that will silently break it if changed:
+- `SourceDestCheck` must stay `false` on the ENI, or the kernel drops every forwarded packet with no error and no log.
+- The NAT security group must only admit the VPC CIDR. A `0.0.0.0/0` ingress rule turns it into an open relay.
+
+The AMI is discovered via `LookupAmi` against owner `568608671756`, name `fck-nat-al2023-*`; override with `FckNatAMIOwner` / `FckNatAMINamePattern` on `VPCArgs` if the vendor rotates either.
 
 The default flags (`enable-gke=false`, `enable-eks=false`, `enable-managed-state=false`, `enable-bowtie=false`) produce the cheap VM-based SPIRE test track. Flip flags to opt into the K8s, managed-state, or Bowtie paths.
 

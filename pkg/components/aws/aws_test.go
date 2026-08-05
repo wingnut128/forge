@@ -54,7 +54,28 @@ func TestNewVPC_CreatesResources(t *testing.T) {
 		t.Fatalf("RunErr failed: %v", err)
 	}
 
-	for _, expected := range []string{"forge-dev-vpc", "forge-dev-subnet-a", "forge-dev-subnet-b", "forge-dev-sg-internal"} {
+	for _, expected := range []string{"forge-dev-vpc", "forge-dev-subnet-a", "forge-dev-subnet-b", "forge-dev-sg-internal", "forge-dev-fcknat-a-asg"} {
+		if !mock.hasResource(expected) {
+			t.Errorf("expected resource containing %q, got %v", expected, mock.names)
+		}
+	}
+	// A single NAT fleet serves both private subnets unless MultiAZNAT is set.
+	if mock.hasResource("forge-dev-fcknat-b") {
+		t.Errorf("did not expect a second NAT fleet when MultiAZNAT is false, got %v", mock.names)
+	}
+}
+
+func TestNewVPC_MultiAZNATCreatesSecondFleet(t *testing.T) {
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		_, err := NewVPC(ctx, "test-vpc", &VPCArgs{Environment: "dev", Region: "us-east-1", MultiAZNAT: true})
+		return err
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("RunErr failed: %v", err)
+	}
+
+	for _, expected := range []string{"forge-dev-fcknat-a-asg", "forge-dev-fcknat-b-asg", "forge-dev-fcknat-b-eni"} {
 		if !mock.hasResource(expected) {
 			t.Errorf("expected resource containing %q, got %v", expected, mock.names)
 		}

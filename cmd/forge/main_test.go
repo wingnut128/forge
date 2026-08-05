@@ -10,6 +10,9 @@ import (
 
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+
+	awscomp "github.com/wingnut128/forge/pkg/components/aws"
+	"github.com/wingnut128/forge/pkg/components/gcp"
 )
 
 // --- runServe tests ---
@@ -354,5 +357,24 @@ func TestDeployFunc_VPNWithoutKeysFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "wg-gcp-private-key") {
 		t.Errorf("error = %q, want mention of wg-gcp-private-key", err)
+	}
+}
+
+// The cloud packages each hardcode the peer's SPIRE address so neither has to
+// import the other. This guards the two copies against drifting apart.
+func TestSPIREPeerAddressesAgree(t *testing.T) {
+	gcpHCL, err := gcp.RenderPeerEndpointForTest()
+	if err != nil {
+		t.Fatalf("gcp: %v", err)
+	}
+	awsHCL, err := awscomp.RenderPeerEndpointForTest()
+	if err != nil {
+		t.Fatalf("aws: %v", err)
+	}
+	if gcpHCL != awscomp.SPIREServerPrivateIP {
+		t.Errorf("GCP believes the AWS SPIRE server is at %s, but AWS pins %s", gcpHCL, awscomp.SPIREServerPrivateIP)
+	}
+	if awsHCL != gcp.SPIREServerPrivateIP {
+		t.Errorf("AWS believes the GCP SPIRE server is at %s, but GCP pins %s", awsHCL, gcp.SPIREServerPrivateIP)
 	}
 }

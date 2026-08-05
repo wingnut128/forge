@@ -9,18 +9,14 @@ server {
         bundle_endpoint {
             address = "0.0.0.0"
             port = 8443
-            profile "https_web" {
-                serving_cert_file {
-                    cert_file_path = "/etc/spire/certs/server.crt"
-                    key_file_path = "/etc/spire/certs/server.key"
-                    file_sync_interval = "1h"
-                }
-            }
+            profile "https_spiffe" {}
         }
 
         federates_with "forge.gcp.local" {
             bundle_endpoint_url = "https://spire-gcp-server:8443"
-            bundle_endpoint_profile "https_web" {}
+            bundle_endpoint_profile "https_spiffe" {
+                endpoint_spiffe_id = "spiffe://forge.gcp.local/spire/server"
+            }
         }
     }
 }

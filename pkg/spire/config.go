@@ -20,6 +20,22 @@ const (
 	StateModeManaged StateMode = "managed"
 )
 
+// BundleProfile selects the SPIFFE federation bundle endpoint profile.
+type BundleProfile string
+
+const (
+	// BundleProfileSPIFFE authenticates the bundle endpoint with the server's
+	// own SVID, validated against the trust bundle the peer already holds. It
+	// needs no serving certificate, no CA, and no web PKI — but the peer bundle
+	// must be seeded before the first fetch, which the one-time bootstrap
+	// bundle exchange already does.
+	BundleProfileSPIFFE BundleProfile = "https_spiffe"
+	// BundleProfileWeb authenticates with a web-PKI serving certificate. It
+	// requires provisioning a cert and key onto each server, and the cert's SAN
+	// must match the address the peer dials.
+	BundleProfileWeb BundleProfile = "https_web"
+)
+
 // ServerConfig is the input for RenderServerHCL.
 type ServerConfig struct {
 	TrustDomain string // required, e.g. "forge.gcp.local"
@@ -31,11 +47,22 @@ type ServerConfig struct {
 
 	// Federation
 	PeerTrustDomain       string // required
-	PeerBundleEndpointURL string // required, e.g. "https://spire-aws-server:8443"
+	PeerBundleEndpointURL string // required, e.g. "https://10.99.0.2:8443"
 	BundleEndpointAddress string // default "0.0.0.0"
 	BundleEndpointPort    string // default "8443"
-	BundleEndpointCert    string // default "/etc/spire/certs/server.crt"
-	BundleEndpointKey     string // default "/etc/spire/certs/server.key"
+
+	// BundleProfile selects how the bundle endpoint is authenticated.
+	// Defaults to BundleProfileSPIFFE.
+	BundleProfile BundleProfile
+
+	// PeerEndpointSpiffeID is the SPIFFE ID the peer's bundle endpoint presents.
+	// Required for BundleProfileSPIFFE; defaults to
+	// "spiffe://<PeerTrustDomain>/spire/server". Ignored for https_web.
+	PeerEndpointSpiffeID string
+
+	// The following apply only to BundleProfileWeb.
+	BundleEndpointCert string // default "/etc/spire/certs/server.crt"
+	BundleEndpointKey  string // default "/etc/spire/certs/server.key"
 	// BundleEndpointSyncInterval is the serving_cert_file file_sync_interval.
 	// SPIRE 1.11.x requires this duration (empty -> "invalid duration" error).
 	BundleEndpointSyncInterval string // default "1h"
@@ -63,6 +90,9 @@ var serverTemplate = template.Must(template.New("server").Parse(
         bundle_endpoint {
             address = "{{.BundleEndpointAddress}}"
             port = {{.BundleEndpointPort}}
+{{- if eq .BundleProfile "https_spiffe" }}
+            profile "https_spiffe" {}
+{{- else }}
             profile "https_web" {
                 serving_cert_file {
                     cert_file_path = "{{.BundleEndpointCert}}"
@@ -70,11 +100,18 @@ var serverTemplate = template.Must(template.New("server").Parse(
                     file_sync_interval = "{{.BundleEndpointSyncInterval}}"
                 }
             }
+{{- end }}
         }
 
         federates_with "{{.PeerTrustDomain}}" {
             bundle_endpoint_url = "{{.PeerBundleEndpointURL}}"
+{{- if eq .BundleProfile "https_spiffe" }}
+            bundle_endpoint_profile "https_spiffe" {
+                endpoint_spiffe_id = "{{.PeerEndpointSpiffeID}}"
+            }
+{{- else }}
             bundle_endpoint_profile "https_web" {}
+{{- end }}
         }
     }
 }
@@ -111,6 +148,12 @@ func RenderServerHCL(cfg ServerConfig) (string, error) {
 		return "", fmt.Errorf("PeerBundleEndpointURL is required")
 	}
 	applyServerDefaults(&cfg)
+
+	switch cfg.BundleProfile {
+	case BundleProfileSPIFFE, BundleProfileWeb:
+	default:
+		return "", fmt.Errorf("unknown BundleProfile %q", cfg.BundleProfile)
+	}
 
 	port, portErr := strconv.Atoi(cfg.BundleEndpointPort)
 	if portErr != nil {
@@ -306,5 +349,13 @@ func applyServerDefaults(cfg *ServerConfig) {
 	}
 	if cfg.BundleEndpointSyncInterval == "" {
 		cfg.BundleEndpointSyncInterval = "1h"
+	}
+	if cfg.BundleProfile == "" {
+		cfg.BundleProfile = BundleProfileSPIFFE
+	}
+	// The bundle endpoint is served by the SPIRE server itself, whose SVID is
+	// always spiffe://<trust-domain>/spire/server.
+	if cfg.PeerEndpointSpiffeID == "" {
+		cfg.PeerEndpointSpiffeID = "spiffe://" + cfg.PeerTrustDomain + "/spire/server"
 	}
 }

@@ -9,6 +9,11 @@ import (
 	"github.com/wingnut128/forge/pkg/spire"
 )
 
+// gcpSPIREServerPrivateIP mirrors gcp.SPIREServerPrivateIP. It is duplicated
+// rather than imported to keep the cloud packages independent of each other;
+// TestSPIREPeerAddressesAgree in cmd/forge guards against drift.
+const gcpSPIREServerPrivateIP = "10.0.16.10"
+
 // SPIREServerArgs configures the AWS SPIRE server EC2 instance.
 type SPIREServerArgs struct {
 	Environment      string
@@ -113,6 +118,7 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 		Ami:                      pulumi.String(args.AMI),
 		InstanceType:             pulumi.String(instanceType),
 		SubnetId:                 args.PrivateSubnetID,
+		PrivateIp:                pulumi.String(SPIREServerPrivateIP),
 		VpcSecurityGroupIds:      pulumi.StringArray{sg.ID().ToStringOutput(), args.InternalSGID.ToStringOutput()},
 		AssociatePublicIpAddress: pulumi.Bool(false),
 		IamInstanceProfile:       profile.Name,
@@ -159,9 +165,12 @@ func spireAWSUserData(args *SPIREServerArgs) (string, error) {
 		mode = spire.StateModeManaged
 	}
 	serverHCL, err := spire.RenderServerHCL(spire.ServerConfig{
-		TrustDomain:           args.TrustDomain,
-		PeerTrustDomain:       args.PeerTrustDomain,
-		PeerBundleEndpointURL: fmt.Sprintf("https://%s:8443", args.PeerTrustDomain),
+		TrustDomain:     args.TrustDomain,
+		PeerTrustDomain: args.PeerTrustDomain,
+		// The peer is addressed by its pinned private IP, routed over the
+		// WireGuard tunnel — a SPIFFE trust domain is an identifier, not an
+		// address, and nothing resolves it.
+		PeerBundleEndpointURL: fmt.Sprintf("https://%s:8443", gcpSPIREServerPrivateIP),
 		StateMode:             mode,
 		ManagedDBConnString:   "postgres://spire@127.0.0.1:5432/spire", // Phase 2: real managed DSN
 	})

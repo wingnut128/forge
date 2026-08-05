@@ -16,6 +16,11 @@ const (
 	VPCCIDR           = "10.0.0.0/16"
 	PrimarySubnetCIDR = "10.0.0.0/20"
 	MgmtSubnetCIDR    = "10.0.16.0/24"
+
+	// SPIREServerPrivateIP is pinned so the AWS peer can address the bundle
+	// endpoint without discovering it. A dynamic address would be circular:
+	// each cloud's SPIRE config would need the other's instance to exist first.
+	SPIREServerPrivateIP = "10.0.16.10"
 )
 
 // NetworkArgs configures the VPC network component.

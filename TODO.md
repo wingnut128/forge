@@ -27,7 +27,8 @@
 - [x] Feature-flagged managed state (Cloud SQL + RDS + KMS + Secret Manager)
 - [x] Post-provision SPIRE bootstrap — **Phase 1 local proof complete** (verified live via `make demo` on Apple `container`; MR !51): federation bundle exchange, registration entry, agent join token, GCP-minted JWT-SVID validated on the AWS-role `forge serve`
 - [x] Cross-cloud private transport — WireGuard point-to-point tunnel (`enable-vpn`), GCE gateway VM ↔ AWS fck-nat instance, so SPIRE is reachable only over the VPN
-- [ ] Repoint `PeerBundleEndpointURL` at the peer's tunnel-side address (currently `https://<peer-trust-domain>:8443`, which resolves to nothing)
+- [x] Repoint `PeerBundleEndpointURL` at the peer's pinned private IP, routed over the tunnel (was `https://<peer-trust-domain>:8443`, which resolved to nothing)
+- [x] Switch the bundle endpoint to the `https_spiffe` profile — no serving cert, CA, or key distribution needed
 - [ ] Post-provision SPIRE bootstrap — Phase 2 live: wire bootstrap against live GCP/AWS VMs, real upstream CA, cloud-native node attestors
 - [ ] Bowtie licensing + initial admin bootstrap automation
 - [ ] Provision instance secrets from a secret store rather than instance metadata — AWS SSM Parameter Store and GCP Secret Manager, read at boot via the instance profile / service account. Applies to the WireGuard private keys (currently in userdata, so readable via IMDS by anything on the box) and to the SPIRE bundle-endpoint serving key when F-01 lands.
@@ -63,6 +64,6 @@
 ### Phase-2 gates (blocked on live cloud / keystore — see threat model)
 - [ ] F-15: move the SPIRE CA signing key off local disk to KMS (`gcp_kms`/`aws_kms`); exclude key material from disk snapshots
 - [ ] F-16: set the real GCP OIDC TLS thumbprint on the AWS IAM OIDC provider (currently all-zeros placeholder)
-- [ ] F-01: provision the bundle-endpoint serving cert; evaluate `https_spiffe` over `https_web`
+- [x] F-01: retired for the default path — `https_spiffe` authenticates the endpoint with the server's own SVID, so no serving cert exists to provision. Still applies if `BundleProfileWeb` is ever selected.
 - [ ] F-13: replace `join_token` node attestation with cloud-native attestors (gcp_iit / aws_iid)
 - [ ] F-17: disable Cloud SQL public IPv4; private IP + authorized networks + SSL

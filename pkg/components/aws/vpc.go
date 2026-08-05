@@ -10,6 +10,12 @@ import (
 // VPCCIDR is the AWS-side address space, chosen not to overlap GCP.
 const VPCCIDR = "10.1.0.0/16"
 
+// SPIREServerPrivateIP is pinned so the GCP peer can address the bundle
+// endpoint without discovering it. A dynamic address would be circular: each
+// cloud's SPIRE config would need the other's instance to exist first. It sits
+// in private subnet A (10.1.0.0/20).
+const SPIREServerPrivateIP = "10.1.0.10"
+
 // VPCArgs configures the AWS VPC component.
 type VPCArgs struct {
 	Environment string

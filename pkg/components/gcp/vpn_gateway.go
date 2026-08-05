@@ -181,3 +181,9 @@ func NewVPNGateway(ctx *pulumi.Context, name string, args *VPNGatewayArgs, opts 
 	}
 	return component, nil
 }
+
+// RenderPeerEndpointForTest exposes the hardcoded AWS SPIRE address so a
+// cross-package test can assert the two clouds agree.
+func RenderPeerEndpointForTest() (string, error) {
+	return awsSPIREServerPrivateIP, nil
+}

@@ -179,6 +179,14 @@ Packet forwarding must be enabled on both gateways or they silently drop routed 
 
 **The private keys currently reach the hosts through instance metadata**, which is readable via IMDS by anything on the box. That is a known POC-grade shortcut; the TODO to move them into SSM Parameter Store / GCP Secret Manager is tracked and should land before this is anything but a proof.
 
+### Federation addressing and the bundle endpoint profile
+
+**A SPIFFE trust domain is an identifier, not an address.** Nothing resolves it, so the trust domain names are free to be anything (`forge.dev.gcp`, `forge.dev.aws`) and can change without touching the network. Peers are addressed by pinned private IPs — `gcp.SPIREServerPrivateIP` (`10.0.16.10`) and `aws.SPIREServerPrivateIP` (`10.1.0.10`) — routed over the WireGuard tunnel. They are pinned because a dynamic address would be circular: each cloud's SPIRE config would need the other's instance to already exist. Each cloud package hardcodes its peer's address to stay independent of the other; `TestSPIREPeerAddressesAgree` guards the copies against drift.
+
+The bundle endpoint uses the **`https_spiffe`** profile by default (`pkg/spire/config.go`). The endpoint authenticates with the SPIRE server's own SVID, validated against the trust bundle the peer already holds — so there is **no serving certificate, no CA, no key distribution, and no SAN to match**. This retires threat-model item F-01 for the default path rather than solving it.
+
+The tradeoff: `https_spiffe` requires the peer bundle to be seeded before the first fetch. The one-time manual bundle exchange during bootstrap (`demo/bootstrap.sh:37-45`) already does exactly that, so it costs nothing extra here. `BundleProfileWeb` remains available and still emits `serving_cert_file` — it is the right choice only if the endpoint is ever exposed over public web PKI, which would then need the cert provisioning F-01 describes.
+
 ### AWS egress: fck-nat, not NAT Gateway
 
 Private-subnet egress runs through [fck-nat](https://fck-nat.dev) NAT instances (`pkg/components/aws/fcknat.go`) instead of a managed NAT Gateway — roughly $10/month against $36.50, and the SPIRE server's only real egress need is a one-time ~30 MB download at boot.

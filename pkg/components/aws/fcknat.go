@@ -292,3 +292,9 @@ func newFckNat(ctx *pulumi.Context, args fckNatArgs, opts ...pulumi.ResourceOpti
 
 	return &fckNat{RoutingENIID: eni.ID(), PublicIP: eip.PublicIp}, nil
 }
+
+// RenderPeerEndpointForTest exposes the hardcoded GCP SPIRE address so a
+// cross-package test can assert the two clouds agree.
+func RenderPeerEndpointForTest() (string, error) {
+	return gcpSPIREServerPrivateIP, nil
+}

@@ -9,6 +9,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Install git pre-commit hooks once per clone: `make hooks`. The hook runs `make lint` (gofmt check, `go vet`, `golangci-lint`, `go build`) before every commit — the same gate as the CI Lint job. Linting is mandatory; commits and PRs must pass it.
 - For GitHub operations, use the `gh` CLI. CI runs on GitHub Actions (`.github/workflows/`).
 
+## CI and Dependency Automation
+
+Workflows in `.github/workflows/`:
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | push / PR | Build & Test, Coverage, Lint |
+| `codeql.yml` | push / PR / schedule | CodeQL security analysis |
+| `dependabot-auto-merge.yml` | `pull_request` | Auto-merges Dependabot patch/minor bumps |
+
+`main` requires the **Build & Test** and **Lint** checks to pass. Code-owner review is *not* required — `.github/CODEOWNERS` routes review requests but does not gate merges.
+
+### Dependabot auto-merge
+
+`dependabot-auto-merge.yml` enables GitHub auto-merge (squash) on Dependabot PRs when the update is **semver-patch or semver-minor**. Major bumps are deliberately left for manual review. Required CI checks still gate the merge, so a failing bump never lands.
+
+It uses `GITHUB_TOKEN` only — there is no PAT and no credential to rotate. Do not reintroduce one: a long-lived token here previously expired unnoticed, because on major bumps the merge step is skipped by the semver condition and the job reports green without ever exercising the token.
+
+### Action version pinning
+
+Actions are pinned to **floating major tags** (`@v4`, `@v7`) so patches and minors are picked up automatically. `github/codeql-action` is excluded from patch/minor Dependabot updates in `.github/dependabot.yml` — left alone, Dependabot proposes narrowing `@v4` to a fixed patch pin, which lands stale and generates a PR per patch. Major bumps still open PRs for every action.
+
 ## What This Is
 
 Forge is a cross-cloud workload attestation platform built with Pulumi (Go) and SPIFFE/SPIRE. It provisions GCP and AWS infrastructure and configures bidirectional SPIFFE trust domain federation between them.

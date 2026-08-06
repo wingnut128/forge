@@ -30,7 +30,8 @@
 - [x] Repoint `PeerBundleEndpointURL` at the peer's pinned private IP, routed over the tunnel (was `https://<peer-trust-domain>:8443`, which resolved to nothing)
 - [x] Switch the bundle endpoint to the `https_spiffe` profile — no serving cert, CA, or key distribution needed
 - [x] Provision a SPIRE agent live — co-located on the GCP SPIRE server VM, installed but not started; `forge-agent-join <token>` supplies the single-use join token at bootstrap
-- [ ] Provision `forge serve` on the AWS side — nothing runs it today, so there is no validator endpoint for the proof
+- [x] Provision `forge serve` on the AWS side — built from source alongside the AWS SPIRE server, crash-loops until the bootstrap bundle exchange completes, then self-starts
+- [ ] Replace the build-from-source install of `forge serve` with a released binary once release automation exists
 - [ ] Run the live bootstrap by hand (bundle exchange → join token → `-federatesWith` entry → mint + validate) and capture the transcript before automating any of it
 - [ ] Post-provision SPIRE bootstrap — Phase 2 live: wire bootstrap against live GCP/AWS VMs, real upstream CA, cloud-native node attestors
 - [ ] Bowtie licensing + initial admin bootstrap automation

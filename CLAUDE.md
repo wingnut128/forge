@@ -135,7 +135,7 @@ cmd/forge/              → main.go: thin CLI entrypoint (os.Args dispatch + Aut
 pkg/config/             → config.go: loads and validates ForgeConfig from Pulumi stack config
 pkg/components/gcp/     → network.go, gke.go, workload_identity.go,
                           spire_server.go, bowtie.go, managed_state.go (GCP Pulumi components)
-pkg/components/aws/     → vpc.go, fcknat.go, eks.go, spire_oidc.go, spire_server.go, bowtie.go, managed_state.go (AWS Pulumi components)
+pkg/components/aws/     → vpc.go, fcknat.go, eks.go, spire_oidc.go, spire_server.go, forge_serve.go, bowtie.go, managed_state.go (AWS Pulumi components)
 pkg/wireguard/          → config.go: renders the cross-cloud tunnel's boot config (cloud-agnostic)
 pkg/attestation/        → trust.go, bundle.go, validate.go (SPIFFE federation + JWT-SVID validation)
 pkg/orchestration/      → server.go: HTTP server for /validate and /healthz endpoints
@@ -196,6 +196,16 @@ The live bootstrap, the analogue of `demo/bootstrap.sh`, is deliberately **manua
 3. Mint a join token on the GCP server (`token generate -spiffeID <agent-id>`), then `forge-agent-join <token>` on that host.
 4. Create the workload registration entry **with `-federatesWith <aws-trust-domain>`**. Without that flag the SVID carries no federated audience and the peer rejects it.
 5. Mint a JWT-SVID with the AWS trust domain as audience and POST it to `forge serve` on the AWS side.
+
+### `forge serve` (the validator)
+
+`forge serve` runs alongside the **AWS** SPIRE server (`pkg/components/aws/forge_serve.go`), built from source on the instance at `ForgeRepoRef` (default `main`). It listens on `:8080`, reachable VPC-internally through the existing internal security group.
+
+**It is expected to crash-loop from first boot until the bootstrap completes.** `pkg/attestation` treats the initial bundle fetch as fatal (`bundle.go:133-136`), so the process exits until the GCP bundle endpoint is reachable *and* the trust bundles have been exchanged. The unit uses `Restart=always` with a 15s backoff, so it comes up on its own once step 2 of the bootstrap lands — no operator action is needed to start it. A crash-looping `forge-serve` before bootstrap is normal, not a fault.
+
+Authorization stays opt-in: no `FORGE_POLICY_DIR` is set, so Cedar evaluation is disabled and `/validate` reports attestation validity only.
+
+Go is installed from the distro package purely to bootstrap; `GOTOOLCHAIN=auto` then fetches whatever version `go.mod` requires, so no Go release needs pinning here.
 
 ### Federation addressing and the bundle endpoint profile
 

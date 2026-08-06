@@ -27,6 +27,9 @@ type SPIREServerArgs struct {
 	TrustDomain      string
 	PeerTrustDomain  string
 	ManagedStateMode bool
+	// ForgeRepoRef is the git ref of this repo built for `forge serve`.
+	// Defaults to DefaultForgeRepoRef.
+	ForgeRepoRef string
 }
 
 // SPIREServer provisions a single EC2 instance + EBS data volume for spire-server.
@@ -178,5 +181,19 @@ func spireAWSUserData(args *SPIREServerArgs) (string, error) {
 		return "", err
 	}
 
-	return spire.RenderServerStartupScript(args.SPIREVersion, serverHCL, "/dev/xvdf"), nil
+	script := spire.RenderServerStartupScript(args.SPIREVersion, serverHCL, "/dev/xvdf")
+
+	// The validator runs alongside the AWS SPIRE server. It is the endpoint the
+	// cross-cloud proof POSTs a GCP-minted JWT-SVID to, and a separate VM would
+	// add cost without changing what is demonstrated.
+	serveScript, err := renderForgeServeScript(forgeServeArgs{
+		LocalTrustDomain:  args.TrustDomain,
+		RemoteTrustDomain: args.PeerTrustDomain,
+		BundleEndpointURL: fmt.Sprintf("https://%s:8443", gcpSPIREServerPrivateIP),
+		RepoRef:           args.ForgeRepoRef,
+	})
+	if err != nil {
+		return "", err
+	}
+	return script + serveScript, nil
 }

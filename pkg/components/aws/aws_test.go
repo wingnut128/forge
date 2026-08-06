@@ -330,3 +330,82 @@ func TestNewManagedState_NilArgs(t *testing.T) {
 		t.Fatalf("RunErr failed: %v", err)
 	}
 }
+
+func TestRenderForgeServeScript(t *testing.T) {
+	got, err := renderForgeServeScript(forgeServeArgs{
+		LocalTrustDomain:  "forge.dev.aws",
+		RemoteTrustDomain: "forge.dev.gcp",
+		BundleEndpointURL: "https://10.0.16.10:8443",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{
+		"FORGE_LOCAL_TRUST_DOMAIN=forge.dev.aws",
+		"FORGE_REMOTE_TRUST_DOMAIN=forge.dev.gcp",
+		"FORGE_BUNDLE_ENDPOINT_URL=https://10.0.16.10:8443",
+		"ExecStart=/usr/local/bin/forge serve",
+		"--branch main",
+		// The initial bundle fetch is fatal, so it must retry until bootstrap.
+		"Restart=always",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("forge serve script missing %q:\n%s", want, got)
+		}
+	}
+	// Authorization stays opt-in; no policy dir should be configured.
+	if strings.Contains(got, "FORGE_POLICY_DIR") {
+		t.Errorf("forge serve should not enable authz by default:\n%s", got)
+	}
+}
+
+func TestRenderForgeServeScript_HonorsRepoRef(t *testing.T) {
+	got, err := renderForgeServeScript(forgeServeArgs{
+		LocalTrustDomain:  "forge.dev.aws",
+		RemoteTrustDomain: "forge.dev.gcp",
+		BundleEndpointURL: "https://10.0.16.10:8443",
+		RepoRef:           "v0.2.0",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "--branch v0.2.0") {
+		t.Errorf("repo ref not honored:\n%s", got)
+	}
+}
+
+func TestRenderForgeServeScript_RequiresTrustDomains(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args forgeServeArgs
+	}{
+		{"no local td", forgeServeArgs{RemoteTrustDomain: "b", BundleEndpointURL: "https://x:8443"}},
+		{"no remote td", forgeServeArgs{LocalTrustDomain: "a", BundleEndpointURL: "https://x:8443"}},
+		{"no bundle url", forgeServeArgs{LocalTrustDomain: "a", RemoteTrustDomain: "b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := renderForgeServeScript(tc.args); err == nil {
+				t.Fatalf("expected error for %s", tc.name)
+			}
+		})
+	}
+}
+
+// The AWS user data must carry both the SPIRE server and the validator.
+func TestSpireAWSUserData_IncludesForgeServe(t *testing.T) {
+	got, err := spireAWSUserData(&SPIREServerArgs{
+		Environment:     "dev",
+		AMI:             "ami-fake",
+		TrustDomain:     "forge.dev.aws",
+		PeerTrustDomain: "forge.dev.gcp",
+		SPIREVersion:    "1.11.2",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{"spire-server.service", "forge-serve.service", gcpSPIREServerPrivateIP} {
+		if !strings.Contains(got, want) {
+			t.Errorf("user data missing %q", want)
+		}
+	}
+}

@@ -29,8 +29,21 @@ func deployFunc(ctx *pulumi.Context) error {
 		return err
 	}
 
-	awsVPC, err := awsFoundationPhase(ctx, cfg)
+	// Each cloud's tunnel config needs the other's public endpoint, so reserve
+	// the GCP address before the AWS VPC is built. AWS can then allowlist it,
+	// and the GCP gateway consumes AWS's NAT address afterwards — breaking what
+	// would otherwise be a circular dependency between the two foundations.
+	vpnIP, err := vpnAddressPhase(ctx, cfg)
 	if err != nil {
+		return err
+	}
+
+	awsVPC, err := awsFoundationPhase(ctx, cfg, vpnIP)
+	if err != nil {
+		return err
+	}
+
+	if err := vpnGatewayPhase(ctx, cfg, network, awsVPC, vpnIP); err != nil {
 		return err
 	}
 
@@ -141,12 +154,52 @@ func gcpFoundationPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig) (*gcp
 	return network, nil
 }
 
-func awsFoundationPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig) (*awscomp.VPC, error) {
-	awsVPC, err := awscomp.NewVPC(ctx, "forge-aws-vpc", &awscomp.VPCArgs{
+// vpnAddressPhase reserves the GCP gateway's static IP. It returns an empty
+// output when the VPN is disabled, which leaves the NAT instances as plain NAT.
+func vpnAddressPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig) (pulumi.StringOutput, error) {
+	if !cfg.EnableVPN {
+		return pulumi.String("").ToStringOutput(), nil
+	}
+	addr, err := gcp.NewVPNAddress(ctx, fmt.Sprintf("forge-%s-vpn-ip", cfg.Environment), cfg.GCPRegion)
+	if err != nil {
+		return pulumi.StringOutput{}, fmt.Errorf("vpn address: %w", err)
+	}
+	return addr, nil
+}
+
+func vpnGatewayPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, network *gcp.Network, awsVPC *awscomp.VPC, vpnIP pulumi.StringOutput) error {
+	if !cfg.EnableVPN {
+		return nil
+	}
+	if _, err := gcp.NewVPNGateway(ctx, "forge-gcp-vpn", &gcp.VPNGatewayArgs{
+		Environment:    cfg.Environment,
+		Region:         cfg.GCPRegion,
+		MgmtSubnetLink: network.MgmtSubnetLink,
+		VPCID:          network.ID,
+		ExternalIP:     vpnIP,
+		PrivateKey:     cfg.WGGCPPrivateKey,
+		PeerPublicKey:  cfg.WGAWSPublicKey,
+		PeerEndpointIP: awsVPC.NATPublicIP,
+		PeerCIDR:       awscomp.VPCCIDR,
+	}); err != nil {
+		return fmt.Errorf("gcp vpn gateway: %w", err)
+	}
+	return nil
+}
+
+func awsFoundationPhase(ctx *pulumi.Context, cfg *forgeconfig.ForgeConfig, vpnIP pulumi.StringOutput) (*awscomp.VPC, error) {
+	args := &awscomp.VPCArgs{
 		Environment: cfg.Environment,
 		Region:      cfg.AWSRegion,
 		MultiAZNAT:  cfg.EnableMultiAZNAT,
-	})
+	}
+	if cfg.EnableVPN {
+		args.WGPrivateKey = cfg.WGAWSPrivateKey
+		args.WGPeerPublicKey = cfg.WGGCPPublicKey
+		args.WGPeerEndpoint = vpnIP
+		args.WGPeerCIDR = gcp.VPCCIDR
+	}
+	awsVPC, err := awscomp.NewVPC(ctx, "forge-aws-vpc", args)
 	if err != nil {
 		return nil, fmt.Errorf("aws vpc: %w", err)
 	}

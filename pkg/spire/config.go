@@ -20,6 +20,22 @@ const (
 	StateModeManaged StateMode = "managed"
 )
 
+// BundleProfile selects the SPIFFE federation bundle endpoint profile.
+type BundleProfile string
+
+const (
+	// BundleProfileSPIFFE authenticates the bundle endpoint with the server's
+	// own SVID, validated against the trust bundle the peer already holds. It
+	// needs no serving certificate, no CA, and no web PKI — but the peer bundle
+	// must be seeded before the first fetch, which the one-time bootstrap
+	// bundle exchange already does.
+	BundleProfileSPIFFE BundleProfile = "https_spiffe"
+	// BundleProfileWeb authenticates with a web-PKI serving certificate. It
+	// requires provisioning a cert and key onto each server, and the cert's SAN
+	// must match the address the peer dials.
+	BundleProfileWeb BundleProfile = "https_web"
+)
+
 // ServerConfig is the input for RenderServerHCL.
 type ServerConfig struct {
 	TrustDomain string // required, e.g. "forge.gcp.local"
@@ -31,11 +47,22 @@ type ServerConfig struct {
 
 	// Federation
 	PeerTrustDomain       string // required
-	PeerBundleEndpointURL string // required, e.g. "https://spire-aws-server:8443"
+	PeerBundleEndpointURL string // required, e.g. "https://10.99.0.2:8443"
 	BundleEndpointAddress string // default "0.0.0.0"
 	BundleEndpointPort    string // default "8443"
-	BundleEndpointCert    string // default "/etc/spire/certs/server.crt"
-	BundleEndpointKey     string // default "/etc/spire/certs/server.key"
+
+	// BundleProfile selects how the bundle endpoint is authenticated.
+	// Defaults to BundleProfileSPIFFE.
+	BundleProfile BundleProfile
+
+	// PeerEndpointSpiffeID is the SPIFFE ID the peer's bundle endpoint presents.
+	// Required for BundleProfileSPIFFE; defaults to
+	// "spiffe://<PeerTrustDomain>/spire/server". Ignored for https_web.
+	PeerEndpointSpiffeID string
+
+	// The following apply only to BundleProfileWeb.
+	BundleEndpointCert string // default "/etc/spire/certs/server.crt"
+	BundleEndpointKey  string // default "/etc/spire/certs/server.key"
 	// BundleEndpointSyncInterval is the serving_cert_file file_sync_interval.
 	// SPIRE 1.11.x requires this duration (empty -> "invalid duration" error).
 	BundleEndpointSyncInterval string // default "1h"
@@ -63,6 +90,9 @@ var serverTemplate = template.Must(template.New("server").Parse(
         bundle_endpoint {
             address = "{{.BundleEndpointAddress}}"
             port = {{.BundleEndpointPort}}
+{{- if eq .BundleProfile "https_spiffe" }}
+            profile "https_spiffe" {}
+{{- else }}
             profile "https_web" {
                 serving_cert_file {
                     cert_file_path = "{{.BundleEndpointCert}}"
@@ -70,11 +100,18 @@ var serverTemplate = template.Must(template.New("server").Parse(
                     file_sync_interval = "{{.BundleEndpointSyncInterval}}"
                 }
             }
+{{- end }}
         }
 
         federates_with "{{.PeerTrustDomain}}" {
             bundle_endpoint_url = "{{.PeerBundleEndpointURL}}"
+{{- if eq .BundleProfile "https_spiffe" }}
+            bundle_endpoint_profile "https_spiffe" {
+                endpoint_spiffe_id = "{{.PeerEndpointSpiffeID}}"
+            }
+{{- else }}
             bundle_endpoint_profile "https_web" {}
+{{- end }}
         }
     }
 }
@@ -111,6 +148,12 @@ func RenderServerHCL(cfg ServerConfig) (string, error) {
 		return "", fmt.Errorf("PeerBundleEndpointURL is required")
 	}
 	applyServerDefaults(&cfg)
+
+	switch cfg.BundleProfile {
+	case BundleProfileSPIFFE, BundleProfileWeb:
+	default:
+		return "", fmt.Errorf("unknown BundleProfile %q", cfg.BundleProfile)
+	}
 
 	port, portErr := strconv.Atoi(cfg.BundleEndpointPort)
 	if portErr != nil {
@@ -231,26 +274,7 @@ if ! mountpoint -q /var/lib/spire; then
   mount /var/lib/spire
 fi
 
-if [ ! -x /usr/local/bin/spire-server ]; then
-  cd /tmp
-  SPIRE_PKG="spire-${SPIRE_VERSION}-linux-amd64-musl.tar.gz"
-  SPIRE_BASE="https://github.com/spiffe/spire/releases/download/v${SPIRE_VERSION}"
-  # Retry generously: this VM may boot before the NAT instance finishes
-  # bringing up iptables (~20-30s). curl's default backoff gives up in ~7s,
-  # and with 'set -euo pipefail' a failed download aborts the whole script.
-  # --retry-all-errors is required because connection refused/timeout is not
-  # one of curl's default "transient" retry conditions.
-  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
-    --retry 10 --retry-delay 5 --retry-all-errors \
-    -o "${SPIRE_PKG}" "${SPIRE_BASE}/${SPIRE_PKG}"
-  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
-    --retry 10 --retry-delay 5 --retry-all-errors \
-    -o "${SPIRE_PKG%%.tar.gz}_sha256sum.txt" "${SPIRE_BASE}/${SPIRE_PKG%%.tar.gz}_sha256sum.txt"
-  # Fail closed if the published checksum does not match the downloaded archive.
-  sha256sum -c "${SPIRE_PKG%%.tar.gz}_sha256sum.txt"
-  tar -xzf "${SPIRE_PKG}"
-  install -m 0755 "spire-${SPIRE_VERSION}/bin/spire-server" /usr/local/bin/spire-server
-fi
+%s
 
 mkdir -p /etc/spire /etc/spire/certs /var/lib/spire/data
 cat >/etc/spire/server.conf <<'CONF'
@@ -273,7 +297,35 @@ UNIT
 
 systemctl daemon-reload
 systemctl enable --now spire-server
-`, version, devicePath, serverHCL)
+`, version, devicePath, spireInstallFragment("spire-server"), serverHCL)
+}
+
+// spireInstallFragment returns the guarded, checksum-verified download and
+// install of one SPIRE binary. It expects SPIRE_VERSION to be set by the
+// caller, and is shared by the server and agent scripts so the fail-closed
+// verification cannot drift between them.
+func spireInstallFragment(binary string) string {
+	const tmpl = `if [ ! -x /usr/local/bin/__BIN__ ]; then
+  cd /tmp
+  SPIRE_PKG="spire-${SPIRE_VERSION}-linux-amd64-musl.tar.gz"
+  SPIRE_BASE="https://github.com/spiffe/spire/releases/download/v${SPIRE_VERSION}"
+  # Retry generously: this VM may boot before the NAT instance finishes
+  # bringing up iptables (~20-30s). curl's default backoff gives up in ~7s,
+  # and with 'set -euo pipefail' a failed download aborts the whole script.
+  # --retry-all-errors is required because connection refused/timeout is not
+  # one of curl's default "transient" retry conditions.
+  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+    --retry 10 --retry-delay 5 --retry-all-errors \
+    -o "${SPIRE_PKG}" "${SPIRE_BASE}/${SPIRE_PKG}"
+  curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+    --retry 10 --retry-delay 5 --retry-all-errors \
+    -o "${SPIRE_PKG%.tar.gz}_sha256sum.txt" "${SPIRE_BASE}/${SPIRE_PKG%.tar.gz}_sha256sum.txt"
+  # Fail closed if the published checksum does not match the downloaded archive.
+  sha256sum -c "${SPIRE_PKG%.tar.gz}_sha256sum.txt"
+  tar -xzf "${SPIRE_PKG}"
+  install -m 0755 "spire-${SPIRE_VERSION}/bin/__BIN__" /usr/local/bin/__BIN__
+fi`
+	return strings.ReplaceAll(tmpl, "__BIN__", binary)
 }
 
 func applyServerDefaults(cfg *ServerConfig) {
@@ -307,4 +359,76 @@ func applyServerDefaults(cfg *ServerConfig) {
 	if cfg.BundleEndpointSyncInterval == "" {
 		cfg.BundleEndpointSyncInterval = "1h"
 	}
+	if cfg.BundleProfile == "" {
+		cfg.BundleProfile = BundleProfileSPIFFE
+	}
+	// The bundle endpoint is served by the SPIRE server itself, whose SVID is
+	// always spiffe://<trust-domain>/spire/server.
+	if cfg.PeerEndpointSpiffeID == "" {
+		cfg.PeerEndpointSpiffeID = "spiffe://" + cfg.PeerTrustDomain + "/spire/server"
+	}
+}
+
+// RenderAgentStartupScript returns a bash script that installs spire-agent,
+// writes agent.conf, and installs a systemd unit — but deliberately does NOT
+// start the agent.
+//
+// A join token is single-use and minted by the server at bootstrap time, so it
+// cannot be baked in at deploy time. The unit reads it from an EnvironmentFile
+// that does not exist yet; the operator supplies it once via the generated
+// forge-agent-join helper:
+//
+//	forge-agent-join <token>
+//
+// This keeps the provisioning declarative and the secret out of instance
+// metadata, where anything on the box could read it through IMDS.
+func RenderAgentStartupScript(version, agentHCL string) string {
+	return fmt.Sprintf(`#!/bin/bash
+set -euo pipefail
+SPIRE_VERSION=%q
+
+%s
+
+mkdir -p /etc/spire /var/lib/spire/agent
+cat >/etc/spire/agent.conf <<'CONF'
+%s
+CONF
+
+cat >/etc/systemd/system/spire-agent.service <<'UNIT'
+[Unit]
+Description=SPIRE Agent
+After=network-online.target
+Wants=network-online.target
+# The join token is supplied at bootstrap, not at deploy time.
+ConditionPathExists=/etc/spire/agent-join-token
+
+[Service]
+EnvironmentFile=/etc/spire/agent-join-token
+ExecStart=/usr/local/bin/spire-agent run -config /etc/spire/agent.conf -joinToken ${JOIN_TOKEN}
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+cat >/usr/local/bin/forge-agent-join <<'HELPER'
+#!/bin/bash
+# Supply the one-time join token minted by:
+#   spire-server token generate -spiffeID <agent-id>
+set -euo pipefail
+if [ $# -ne 1 ]; then
+  echo "usage: forge-agent-join <join-token>" >&2
+  exit 2
+fi
+umask 077
+printf 'JOIN_TOKEN=%%s\n' "$1" >/etc/spire/agent-join-token
+systemctl daemon-reload
+systemctl enable --now spire-agent
+systemctl is-active --quiet spire-agent && echo "spire-agent started"
+HELPER
+chmod 0755 /usr/local/bin/forge-agent-join
+
+systemctl daemon-reload
+# Not started: waits for forge-agent-join to supply the token.
+`, version, spireInstallFragment("spire-agent"), agentHCL)
 }

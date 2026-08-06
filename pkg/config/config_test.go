@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"encoding/base64"
+	"strings"
+	"testing"
+)
 
 // baseInput returns a minimally valid ConfigInput for tests to tweak.
 func baseInput() ConfigInput {
@@ -210,3 +214,43 @@ func TestNewForgeConfig_TrustDomainWithUppercase(t *testing.T) {
 		t.Fatal("expected error for uppercase trust domain")
 	}
 }
+
+func TestNewForgeConfig_VPNRequiresKeys(t *testing.T) {
+	in := baseInput()
+	in.EnableVPN = true
+	if _, err := NewForgeConfig(in); err == nil {
+		t.Fatal("expected error when enable-vpn is set without WireGuard keys")
+	} else if !strings.Contains(err.Error(), "wg-gcp-private-key") {
+		t.Errorf("error = %q, want mention of wg-gcp-private-key", err)
+	}
+}
+
+func TestNewForgeConfig_VPNRejectsMalformedKey(t *testing.T) {
+	in := baseInput()
+	in.EnableVPN = true
+	in.WGGCPPrivateKey = "not-a-key"
+	in.WGGCPPublicKey = testWGKey
+	in.WGAWSPrivateKey = testWGKey
+	in.WGAWSPublicKey = testWGKey
+	if _, err := NewForgeConfig(in); err == nil {
+		t.Fatal("expected error for a malformed WireGuard key")
+	}
+}
+
+func TestNewForgeConfig_VPNAcceptsValidKeys(t *testing.T) {
+	in := baseInput()
+	in.EnableVPN = true
+	in.WGGCPPrivateKey = testWGKey
+	in.WGGCPPublicKey = testWGKey
+	in.WGAWSPrivateKey = testWGKey
+	in.WGAWSPublicKey = testWGKey
+	cfg := mustConfig(t, in)
+	if !cfg.EnableVPN || cfg.WGAWSPublicKey != testWGKey {
+		t.Errorf("VPN fields not passed through: %+v", cfg)
+	}
+}
+
+// Validation checks shape only, so this is computed rather than written as a
+// literal: an inline 44-char base64 blob looks exactly like a real key to
+// secret scanners. All-zero bytes cannot be mistaken for key material.
+var testWGKey = base64.StdEncoding.EncodeToString(make([]byte, 32))

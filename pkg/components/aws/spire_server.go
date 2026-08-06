@@ -9,6 +9,11 @@ import (
 	"github.com/wingnut128/forge/pkg/spire"
 )
 
+// gcpSPIREServerPrivateIP mirrors gcp.SPIREServerPrivateIP. It is duplicated
+// rather than imported to keep the cloud packages independent of each other;
+// TestSPIREPeerAddressesAgree in cmd/forge guards against drift.
+const gcpSPIREServerPrivateIP = "10.0.16.10"
+
 // SPIREServerArgs configures the AWS SPIRE server EC2 instance.
 type SPIREServerArgs struct {
 	Environment      string
@@ -22,6 +27,9 @@ type SPIREServerArgs struct {
 	TrustDomain      string
 	PeerTrustDomain  string
 	ManagedStateMode bool
+	// ForgeRepoRef is the git ref of this repo built for `forge serve`.
+	// Defaults to DefaultForgeRepoRef.
+	ForgeRepoRef string
 }
 
 // SPIREServer provisions a single EC2 instance + EBS data volume for spire-server.
@@ -113,6 +121,7 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 		Ami:                      pulumi.String(args.AMI),
 		InstanceType:             pulumi.String(instanceType),
 		SubnetId:                 args.PrivateSubnetID,
+		PrivateIp:                pulumi.String(SPIREServerPrivateIP),
 		VpcSecurityGroupIds:      pulumi.StringArray{sg.ID().ToStringOutput(), args.InternalSGID.ToStringOutput()},
 		AssociatePublicIpAddress: pulumi.Bool(false),
 		IamInstanceProfile:       profile.Name,
@@ -159,9 +168,12 @@ func spireAWSUserData(args *SPIREServerArgs) (string, error) {
 		mode = spire.StateModeManaged
 	}
 	serverHCL, err := spire.RenderServerHCL(spire.ServerConfig{
-		TrustDomain:           args.TrustDomain,
-		PeerTrustDomain:       args.PeerTrustDomain,
-		PeerBundleEndpointURL: fmt.Sprintf("https://%s:8443", args.PeerTrustDomain),
+		TrustDomain:     args.TrustDomain,
+		PeerTrustDomain: args.PeerTrustDomain,
+		// The peer is addressed by its pinned private IP, routed over the
+		// WireGuard tunnel — a SPIFFE trust domain is an identifier, not an
+		// address, and nothing resolves it.
+		PeerBundleEndpointURL: fmt.Sprintf("https://%s:8443", gcpSPIREServerPrivateIP),
 		StateMode:             mode,
 		ManagedDBConnString:   "postgres://spire@127.0.0.1:5432/spire", // Phase 2: real managed DSN
 	})
@@ -169,5 +181,19 @@ func spireAWSUserData(args *SPIREServerArgs) (string, error) {
 		return "", err
 	}
 
-	return spire.RenderServerStartupScript(args.SPIREVersion, serverHCL, "/dev/xvdf"), nil
+	script := spire.RenderServerStartupScript(args.SPIREVersion, serverHCL, "/dev/xvdf")
+
+	// The validator runs alongside the AWS SPIRE server. It is the endpoint the
+	// cross-cloud proof POSTs a GCP-minted JWT-SVID to, and a separate VM would
+	// add cost without changing what is demonstrated.
+	serveScript, err := renderForgeServeScript(forgeServeArgs{
+		LocalTrustDomain:  args.TrustDomain,
+		RemoteTrustDomain: args.PeerTrustDomain,
+		BundleEndpointURL: fmt.Sprintf("https://%s:8443", gcpSPIREServerPrivateIP),
+		RepoRef:           args.ForgeRepoRef,
+	})
+	if err != nil {
+		return "", err
+	}
+	return script + serveScript, nil
 }

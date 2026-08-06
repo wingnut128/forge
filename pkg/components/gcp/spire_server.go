@@ -8,6 +8,11 @@ import (
 	"github.com/wingnut128/forge/pkg/spire"
 )
 
+// awsSPIREServerPrivateIP mirrors aws.SPIREServerPrivateIP. It is duplicated
+// rather than imported to keep the cloud packages independent of each other;
+// TestSPIREPeerAddressesAgree in cmd/forge guards against drift.
+const awsSPIREServerPrivateIP = "10.1.0.10"
+
 // SPIREServerArgs configures the GCP SPIRE server VM.
 type SPIREServerArgs struct {
 	Environment      string
@@ -104,6 +109,7 @@ func NewSPIREServer(ctx *pulumi.Context, name string, args *SPIREServerArgs, opt
 		NetworkInterfaces: compute.InstanceNetworkInterfaceArray{
 			&compute.InstanceNetworkInterfaceArgs{
 				Subnetwork: args.MgmtSubnetLink,
+				NetworkIp:  pulumi.String(SPIREServerPrivateIP),
 				// No access_config -> no public IP. Egress via Cloud NAT.
 			},
 		},
@@ -155,9 +161,12 @@ func spireGCPStartupScript(args *SPIREServerArgs) (string, error) {
 		mode = spire.StateModeManaged
 	}
 	serverHCL, err := spire.RenderServerHCL(spire.ServerConfig{
-		TrustDomain:           args.TrustDomain,
-		PeerTrustDomain:       args.PeerTrustDomain,
-		PeerBundleEndpointURL: fmt.Sprintf("https://%s:8443", args.PeerTrustDomain),
+		TrustDomain:     args.TrustDomain,
+		PeerTrustDomain: args.PeerTrustDomain,
+		// The peer is addressed by its pinned private IP, routed over the
+		// WireGuard tunnel — a SPIFFE trust domain is an identifier, not an
+		// address, and nothing resolves it.
+		PeerBundleEndpointURL: fmt.Sprintf("https://%s:8443", awsSPIREServerPrivateIP),
 		StateMode:             mode,
 		ManagedDBConnString:   "postgres://spire@127.0.0.1:5432/spire", // Phase 2: real managed DSN
 	})
@@ -165,5 +174,20 @@ func spireGCPStartupScript(args *SPIREServerArgs) (string, error) {
 		return "", err
 	}
 
-	return spire.RenderServerStartupScript(args.SPIREVersion, serverHCL, "/dev/disk/by-id/google-spire-data"), nil
+	script := spire.RenderServerStartupScript(args.SPIREVersion, serverHCL, "/dev/disk/by-id/google-spire-data")
+
+	// The agent is co-located with the server: it is what mints the JWT-SVID the
+	// cross-cloud proof validates, and a separate VM would add cost without
+	// changing what is being demonstrated. It talks to the server over loopback,
+	// which is also why insecure_bootstrap is acceptable here — the trust bundle
+	// is fetched from a server on the same host, not across a network.
+	agentHCL, err := spire.RenderAgentHCL(spire.AgentConfig{
+		TrustDomain:       args.TrustDomain,
+		ServerAddress:     "127.0.0.1",
+		InsecureBootstrap: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("agent config: %w", err)
+	}
+	return script + "\n" + spire.RenderAgentStartupScript(args.SPIREVersion, agentHCL), nil
 }

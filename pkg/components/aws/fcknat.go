@@ -8,6 +8,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/wingnut128/forge/pkg/wireguard"
 )
 
 // fck-nat (https://fck-nat.dev) is a NAT instance AMI that replaces a managed
@@ -34,6 +35,13 @@ type fckNatArgs struct {
 	amiOwner       string
 	amiNamePattern string
 	amiArch        string
+
+	// WireGuard settings. When wgPrivateKey is empty the instance is a plain
+	// NAT and no tunnel is configured.
+	wgPrivateKey    string
+	wgPeerPublicKey string
+	wgPeerEndpoint  pulumi.StringOutput
+	wgPeerCIDR      string
 }
 
 // fckNat is a NAT instance fleet fronted by a persistent ENI.
@@ -44,6 +52,9 @@ type fckNatArgs struct {
 type fckNat struct {
 	// RoutingENIID is the stable 0.0.0.0/0 target for private route tables.
 	RoutingENIID pulumi.IDOutput
+	// PublicIP is the instance's stable egress address, and the endpoint the
+	// GCP gateway dials for the WireGuard tunnel.
+	PublicIP pulumi.StringOutput
 }
 
 func newFckNat(ctx *pulumi.Context, args fckNatArgs, opts ...pulumi.ResourceOption) (*fckNat, error) {
@@ -68,17 +79,31 @@ func newFckNat(ctx *pulumi.Context, args fckNatArgs, opts ...pulumi.ResourceOpti
 
 	// Only VPC-internal traffic may use the NAT. A 0.0.0.0/0 ingress rule here
 	// would turn the instance into an open relay.
+	ingress := ec2.SecurityGroupIngressArray{
+		&ec2.SecurityGroupIngressArgs{
+			Protocol:   pulumi.String("-1"),
+			FromPort:   pulumi.Int(0),
+			ToPort:     pulumi.Int(0),
+			CidrBlocks: pulumi.StringArray{pulumi.String(args.vpcCIDR)},
+		},
+	}
+	// The tunnel port is the only thing reachable from outside the VPC, and
+	// only from the peer gateway's address.
+	if args.wgPrivateKey != "" {
+		ingress = append(ingress, &ec2.SecurityGroupIngressArgs{
+			Protocol: pulumi.String("udp"),
+			FromPort: pulumi.Int(wireguard.ListenPort),
+			ToPort:   pulumi.Int(wireguard.ListenPort),
+			CidrBlocks: pulumi.StringArray{
+				args.wgPeerEndpoint.ApplyT(func(ip string) string { return ip + "/32" }).(pulumi.StringOutput),
+			},
+		})
+	}
+
 	sg, err := ec2.NewSecurityGroup(ctx, name+"-sg", &ec2.SecurityGroupArgs{
 		VpcId:       args.vpcID,
-		Description: pulumi.String("fck-nat instance: VPC-internal egress only"),
-		Ingress: ec2.SecurityGroupIngressArray{
-			&ec2.SecurityGroupIngressArgs{
-				Protocol:   pulumi.String("-1"),
-				FromPort:   pulumi.Int(0),
-				ToPort:     pulumi.Int(0),
-				CidrBlocks: pulumi.StringArray{pulumi.String(args.vpcCIDR)},
-			},
-		},
+		Description: pulumi.String("fck-nat instance: VPC-internal egress, plus the WireGuard tunnel"),
+		Ingress:     ingress,
 		Egress: ec2.SecurityGroupEgressArray{
 			&ec2.SecurityGroupEgressArgs{
 				Protocol:   pulumi.String("-1"),
@@ -183,9 +208,32 @@ func newFckNat(ctx *pulumi.Context, args fckNatArgs, opts ...pulumi.ResourceOpti
 	}
 
 	// fck-nat reads eni_id from its config file and attaches that ENI at boot.
-	userData := eni.ID().ApplyT(func(id pulumi.ID) string {
-		script := fmt.Sprintf("#!/bin/bash\necho \"eni_id=%s\" >> /etc/fck-nat.conf\nservice fck-nat restart\n", id)
-		return base64.StdEncoding.EncodeToString([]byte(script))
+	// When WireGuard is configured the tunnel is brought up in the same script,
+	// so a replacement instance restores both NAT and the tunnel unattended.
+	wgPeerEndpoint := args.wgPeerEndpoint
+	if args.wgPrivateKey == "" {
+		wgPeerEndpoint = pulumi.String("").ToStringOutput()
+	}
+	userData := pulumi.All(eni.ID(), wgPeerEndpoint).ApplyT(func(v []interface{}) (string, error) {
+		eniID, _ := v[0].(pulumi.ID)
+		peerIP, _ := v[1].(string)
+
+		script := fmt.Sprintf("#!/bin/bash\nset -euo pipefail\necho \"eni_id=%s\" >> /etc/fck-nat.conf\nservice fck-nat restart\n", eniID)
+		if args.wgPrivateKey != "" {
+			body, err := wireguard.RenderScript(wireguard.ScriptArgs{
+				PackageManager: wireguard.DNF,
+				Address:        wireguard.AWSTunnelIP + "/30",
+				PrivateKey:     args.wgPrivateKey,
+				PeerPublicKey:  args.wgPeerPublicKey,
+				PeerEndpoint:   fmt.Sprintf("%s:%d", peerIP, wireguard.ListenPort),
+				AllowedIPs:     fmt.Sprintf("%s,%s", wireguard.TunnelCIDR, args.wgPeerCIDR),
+			})
+			if err != nil {
+				return "", err
+			}
+			script += body
+		}
+		return base64.StdEncoding.EncodeToString([]byte(script)), nil
 	}).(pulumi.StringOutput)
 
 	// The primary interface needs its own public IP: attaching the ENI is an
@@ -242,5 +290,11 @@ func newFckNat(ctx *pulumi.Context, args fckNatArgs, opts ...pulumi.ResourceOpti
 		return nil, err
 	}
 
-	return &fckNat{RoutingENIID: eni.ID()}, nil
+	return &fckNat{RoutingENIID: eni.ID(), PublicIP: eip.PublicIp}, nil
+}
+
+// RenderPeerEndpointForTest exposes the hardcoded GCP SPIRE address so a
+// cross-package test can assert the two clouds agree.
+func RenderPeerEndpointForTest() (string, error) {
+	return gcpSPIREServerPrivateIP, nil
 }

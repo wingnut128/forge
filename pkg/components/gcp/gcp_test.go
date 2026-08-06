@@ -309,3 +309,18 @@ func TestNewManagedState_NilArgs(t *testing.T) {
 		t.Fatalf("RunErr failed: %v", err)
 	}
 }
+
+// The private VMs have no public IP and no SSH key, so IAP is the only way in.
+func TestNewNetwork_AllowsIAPSSH(t *testing.T) {
+	mock := &recordingMock{}
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		_, err := NewNetwork(ctx, "test-net", &NetworkArgs{Environment: "dev", Region: "us-central1"})
+		return err
+	}, pulumi.WithMocks("test-project", "test-stack", mock))
+	if err != nil {
+		t.Fatalf("RunErr failed: %v", err)
+	}
+	if !mock.hasResource("forge-dev-allow-iap-ssh") {
+		t.Errorf("expected an IAP SSH firewall rule, got %v", mock.names)
+	}
+}

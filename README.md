@@ -111,3 +111,14 @@ and full expected output; [`docs/why-this-model.md`](docs/why-this-model.md) for
 why the model is valid; [`docs/threat-model.md`](docs/threat-model.md) for the
 STRIDE threat model and Phase-2 security gates; and the
 [design spec](docs/superpowers/specs/2026-06-15-spire-bootstrap-local-proof-design.md).
+
+## Live Federation (Phase 2)
+
+The same proof against real GCP and AWS infrastructure, with the SPIRE servers
+reachable only over a cross-cloud WireGuard tunnel.
+
+[`docs/bootstrap-live.md`](docs/bootstrap-live.md) is the runbook. It brings the
+stack up one layer at a time — deploy, tunnel, SPIRE servers, bundle exchange,
+agent, then the proof — verifying each before the next depends on it, so a
+failure has one suspect rather than several. It also covers teardown and the
+orphaned resources `pulumi destroy` leaves behind.

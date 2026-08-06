@@ -32,7 +32,8 @@
 - [x] Provision a SPIRE agent live — co-located on the GCP SPIRE server VM, installed but not started; `forge-agent-join <token>` supplies the single-use join token at bootstrap
 - [x] Provision `forge serve` on the AWS side — built from source alongside the AWS SPIRE server, crash-loops until the bootstrap bundle exchange completes, then self-starts
 - [ ] Replace the build-from-source install of `forge serve` with a released binary once release automation exists
-- [ ] Run the live bootstrap by hand (bundle exchange → join token → `-federatesWith` entry → mint + validate) and capture the transcript before automating any of it
+- [ ] Run the live bootstrap by hand following `docs/bootstrap-live.md`, and capture the transcript before automating any of it
+- [ ] Confirm whether fck-nat's MASQUERADE rule SNATs tunnel traffic toward the AWS private subnets (layer 2 of the runbook)
 - [ ] Post-provision SPIRE bootstrap — Phase 2 live: wire bootstrap against live GCP/AWS VMs, real upstream CA, cloud-native node attestors
 - [ ] Bowtie licensing + initial admin bootstrap automation
 - [ ] Provision instance secrets from a secret store rather than instance metadata — AWS SSM Parameter Store and GCP Secret Manager, read at boot via the instance profile / service account. Applies to the WireGuard private keys (currently in userdata, so readable via IMDS by anything on the box) and to the SPIRE bundle-endpoint serving key when F-01 lands.

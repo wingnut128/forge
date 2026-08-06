@@ -189,13 +189,11 @@ Provisioning installs the agent, its config, and a systemd unit, but **deliberat
 forge-agent-join <token>
 ```
 
-The live bootstrap, the analogue of `demo/bootstrap.sh`, is deliberately **manual and not automated**. Run it once by hand over SSM (AWS) or IAP (GCP) and keep the transcript — that transcript is the spec for any later automation, and the steps cannot be designed correctly before watching them work against real infrastructure:
+The live bootstrap is deliberately **manual and not automated** — its correct shape isn't knowable until it has been run once against real infrastructure, and that transcript is the specification for automating it.
 
-1. Confirm both servers are healthy (`spire-server healthcheck`).
-2. Exchange trust bundles both directions (`bundle show -format spiffe` → `bundle set`). This must happen **before** the first endpoint fetch: `https_spiffe` validates the peer endpoint against a bundle it already holds.
-3. Mint a join token on the GCP server (`token generate -spiffeID <agent-id>`), then `forge-agent-join <token>` on that host.
-4. Create the workload registration entry **with `-federatesWith <aws-trust-domain>`**. Without that flag the SVID carries no federated audience and the peer rejects it.
-5. Mint a JWT-SVID with the AWS trust domain as audience and POST it to `forge serve` on the AWS side.
+**The full layered runbook is `docs/bootstrap-live.md`.** It brings up one layer at a time (deploy → tunnel → SPIRE servers → bundle exchange → agent → registration and proof) with a verification step and failure triage for each, so a failure has one suspect instead of four. Two steps break silently if skipped: trust bundles must be exchanged **before** the first federated fetch, and the registration entry needs `-federatesWith` or the SVID carries no federated audience.
+
+Access for all of it is IAP on GCP (`gcloud compute ssh --tunnel-through-iap`, permitted by the `-allow-iap-ssh` rule from `35.235.240.0/20`) and SSM on AWS. Neither cloud's instances have SSH keys.
 
 ### `forge serve` (the validator)
 

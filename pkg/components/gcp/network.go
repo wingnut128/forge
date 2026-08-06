@@ -17,6 +17,9 @@ const (
 	PrimarySubnetCIDR = "10.0.0.0/20"
 	MgmtSubnetCIDR    = "10.0.16.0/24"
 
+	// IAPRange is Google's fixed source range for IAP TCP forwarding.
+	IAPRange = "35.235.240.0/20"
+
 	// SPIREServerPrivateIP is pinned so the AWS peer can address the bundle
 	// endpoint without discovering it. A dynamic address would be circular:
 	// each cloud's SPIRE config would need the other's instance to exist first.
@@ -115,6 +118,24 @@ func NewNetwork(ctx *pulumi.Context, name string, args *NetworkArgs, opts ...pul
 			},
 		},
 		SourceRanges: pulumi.StringArray{pulumi.String("10.0.0.0/8")},
+	}, parentOpt)
+	if err != nil {
+		return nil, err
+	}
+
+	// IAP TCP forwarding is the only way onto the private VMs — they have no
+	// public IP and no SSH key. 35.235.240.0/20 is Google's fixed IAP range;
+	// access is gated by IAM (roles/iap.tunnelResourceAccessor), not by network
+	// position. Without this rule a failed boot is undiagnosable.
+	_, err = compute.NewFirewall(ctx, namePrefix+"-allow-iap-ssh", &compute.FirewallArgs{
+		Network: vpc.ID(),
+		Allows: compute.FirewallAllowArray{
+			&compute.FirewallAllowArgs{
+				Protocol: pulumi.String("tcp"),
+				Ports:    pulumi.StringArray{pulumi.String("22")},
+			},
+		},
+		SourceRanges: pulumi.StringArray{pulumi.String(IAPRange)},
 	}, parentOpt)
 	if err != nil {
 		return nil, err

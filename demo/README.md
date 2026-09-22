@@ -85,10 +85,10 @@ make demo-clean      # tear down containers, network, generated artifacts
 
   spire-gcp-server  ──issues JWT-SVID(aud=forge.aws.local)──>  spire-gcp-agent
   (forge.gcp.local)                                            (demo workload)
-        │  https_web bundle endpoint :8443                          │ token
-        │  (demo-CA cert, real RFC 9409 bundle)                     ▼
+        │  https_spiffe bundle endpoint :8443                       │ token
+        │  (server's own SVID, real RFC 9409 bundle)                ▼
         ▼                                                   forge-serve  (AWS role)
-   demo CA trusted via SSL_CERT_FILE  ───────────────────►  BundleRefresher GET (TLS)
+   SVID checked against seeded GCP bundle ───────────────►  BundleRefresher GET (TLS)
                                                                     │
                                                                     ▼
                                           ValidateRemoteSVID → valid:true,
@@ -105,7 +105,9 @@ Forge code — the demo exercises the real validation path.
 1. Wait for both SPIRE servers to report healthy.
 2. **Federation:** exchange trust bundles between the servers (`bundle show` →
    `bundle set`), so each trusts SVIDs the other signs (RFC 9409).
-3. Start `forge serve` (AWS role) once the GCP bundle endpoint is serving.
+3. Start `forge serve` (AWS role) once the GCP bundle endpoint is serving,
+   seeded with the GCP bundle from step 2 (`generated/gcp.bundle`) so it can
+   authenticate that endpoint.
 4. Generate an agent **join token** and launch the GCP agent with it.
 5. Register a demo **workload entry** federated with the AWS trust domain.
 6. **Mint** a JWT-SVID on the GCP side, audience `forge.aws.local`.
@@ -168,8 +170,6 @@ The final line is the proof: **`PASS: cross-cloud SVID validated`**. The
 
 These are local-demo conveniences, not the production model:
 
-- **`https_web` bundle endpoint + throwaway demo CA**, trusted via
-  `SSL_CERT_FILE`. Live would use real web-PKI or SPIFFE-mTLS bundle endpoints.
 - **`insecure_bootstrap`** on the agent (accepts the server on first connect).
   Live should pin a trust bundle.
 - **`join_token` node attestation**. Live uses cloud-native attestors

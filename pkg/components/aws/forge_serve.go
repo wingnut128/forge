@@ -12,6 +12,11 @@ const (
 )
 
 // forgeServeArgs configures the `forge serve` validator unit.
+// ForgeServeSeedPath is where the bootstrap places the peer (GCP) trust
+// bundle on the AWS host. `forge serve` authenticates the peer's https_spiffe
+// bundle endpoint against it on the first fetch.
+const ForgeServeSeedPath = "/etc/forge/peer.bundle"
+
 type forgeServeArgs struct {
 	// LocalTrustDomain is this side's trust domain (AWS).
 	LocalTrustDomain string
@@ -31,11 +36,11 @@ type forgeServeArgs struct {
 // validator runs alongside the AWS SPIRE server rather than on its own VM,
 // which costs nothing extra and is what the demo does in miniature.
 //
-// The unit restarts on failure by design. pkg/attestation treats the initial
-// bundle fetch as fatal, so `forge serve` exits until the peer's bundle
-// endpoint is reachable AND the trust bundles have been exchanged. It will
-// therefore crash-loop from first boot until the manual bootstrap completes,
-// then come up on its own — no operator step is needed to start it.
+// The unit restarts on failure by design. `forge serve` needs the peer bundle
+// at ForgeServeSeedPath to authenticate the peer's https_spiffe endpoint, and
+// pkg/attestation treats the initial bundle fetch as fatal. It will therefore
+// crash-loop from first boot until the bootstrap's bundle exchange has placed
+// the seed and the endpoint is reachable, then come up on its own.
 func renderForgeServeScript(args forgeServeArgs) (string, error) {
 	if args.LocalTrustDomain == "" || args.RemoteTrustDomain == "" {
 		return "", fmt.Errorf("forge serve: local and remote trust domains are required")
@@ -75,11 +80,12 @@ Wants=network-online.target
 Environment=FORGE_LOCAL_TRUST_DOMAIN=__LOCAL_TD__
 Environment=FORGE_REMOTE_TRUST_DOMAIN=__REMOTE_TD__
 Environment=FORGE_BUNDLE_ENDPOINT_URL=__BUNDLE_URL__
+Environment=FORGE_BUNDLE_SEED_FILE=__SEED_PATH__
 Environment=FORGE_LISTEN_ADDR=:8080
 ExecStart=/usr/local/bin/forge serve
-# The initial bundle fetch is fatal, so this crash-loops until the peer
-# endpoint is up and the trust bundles have been exchanged. That is expected
-# before bootstrap completes.
+# The seed bundle and the initial bundle fetch are both required, so this
+# crash-loops until the bootstrap bundle exchange has written the seed and the
+# peer endpoint is up. That is expected before bootstrap completes.
 Restart=always
 RestartSec=15
 
@@ -97,6 +103,7 @@ systemctl enable --now forge-serve
 		"__LOCAL_TD__", args.LocalTrustDomain,
 		"__REMOTE_TD__", args.RemoteTrustDomain,
 		"__BUNDLE_URL__", args.BundleEndpointURL,
+		"__SEED_PATH__", ForgeServeSeedPath,
 	)
 	return r.Replace(tmpl), nil
 }

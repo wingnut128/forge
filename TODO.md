@@ -31,6 +31,7 @@
 - [x] Switch the bundle endpoint to the `https_spiffe` profile — no serving cert, CA, or key distribution needed
 - [x] Provision a SPIRE agent live — co-located on the GCP SPIRE server VM, installed but not started; `forge-agent-join <token>` supplies the single-use join token at bootstrap
 - [x] Provision `forge serve` on the AWS side — built from source alongside the AWS SPIRE server, crash-loops until the bootstrap bundle exchange completes, then self-starts
+- [x] Authenticate `forge serve`'s bundle fetch with `https_spiffe` (SPIFFE auth, seeded from `FORGE_BUNDLE_SEED_FILE`) — the web-PKI client could not verify the endpoint's SVID, which broke `make demo` and the live validator after the profile switch
 - [ ] Replace the build-from-source install of `forge serve` with a released binary once release automation exists
 - [ ] Run the live bootstrap by hand following `docs/bootstrap-live.md`, and capture the transcript before automating any of it
 - [ ] Confirm whether fck-nat's MASQUERADE rule SNATs tunnel traffic toward the AWS private subnets (layer 2 of the runbook)

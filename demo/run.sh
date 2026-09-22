@@ -92,13 +92,16 @@ export RUN_AGENT="$RUN -d --name spire-gcp-agent --network $NET $HOSTS_MOUNT \
   -v $CERTS/ca.crt:/etc/spire/certs/ca.crt:ro \
   -e SSL_CERT_FILE=/etc/spire/certs/ca.crt $SPIRE_AGENT_IMG"
 
+# forge-serve authenticates the GCP bundle endpoint (https_spiffe) against the
+# GCP bundle bootstrap.sh exchanges into $BUNDLE_DIR — no web-PKI CA involved.
+export BUNDLE_DIR="$GEN"
 export RUN_FORGE="$RUN -d --name forge-serve --network $NET -p 8080:8080 $HOSTS_MOUNT \
   -v $GEN/forge:/usr/local/bin/forge:ro \
-  -v $CERTS/ca.crt:/etc/spire/certs/ca.crt:ro \
-  -e SSL_CERT_FILE=/etc/spire/certs/ca.crt \
+  -v $BUNDLE_DIR/gcp.bundle:/etc/forge/peer.bundle:ro \
   -e FORGE_LOCAL_TRUST_DOMAIN=forge.aws.local \
   -e FORGE_REMOTE_TRUST_DOMAIN=forge.gcp.local \
   -e FORGE_BUNDLE_ENDPOINT_URL=https://spire-gcp-server:8443 \
+  -e FORGE_BUNDLE_SEED_FILE=/etc/forge/peer.bundle \
   -e FORGE_LISTEN_ADDR=:8080 \
   --entrypoint /usr/local/bin/forge alpine serve"
 

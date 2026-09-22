@@ -1,15 +1,24 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"math/big"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 
 	awscomp "github.com/wingnut128/forge/pkg/components/aws"
 	"github.com/wingnut128/forge/pkg/components/gcp"
@@ -19,7 +28,7 @@ import (
 
 func TestRunServe_MissingEnvVars(t *testing.T) {
 	// Clear all relevant env vars
-	for _, k := range []string{"FORGE_LOCAL_TRUST_DOMAIN", "FORGE_REMOTE_TRUST_DOMAIN", "FORGE_BUNDLE_ENDPOINT_URL"} {
+	for _, k := range []string{"FORGE_LOCAL_TRUST_DOMAIN", "FORGE_REMOTE_TRUST_DOMAIN", "FORGE_BUNDLE_ENDPOINT_URL", "FORGE_BUNDLE_SEED_FILE"} {
 		t.Setenv(k, "")
 	}
 
@@ -65,10 +74,69 @@ func TestRunServe_MissingBundleURL(t *testing.T) {
 	}
 }
 
+// writeSeedFile writes a SPIFFE bundle for td carrying one self-signed X.509
+// authority — the shape `spire-server bundle show -format spiffe` emits.
+func writeSeedFile(t *testing.T, td string) string {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generating key: %v", err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, key.Public(), key)
+	if err != nil {
+		t.Fatalf("creating cert: %v", err)
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatalf("parsing cert: %v", err)
+	}
+	data, err := spiffebundle.FromX509Authorities(spiffeid.RequireTrustDomainFromString(td),
+		[]*x509.Certificate{cert}).Marshal()
+	if err != nil {
+		t.Fatalf("marshaling bundle: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "peer.bundle")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("writing seed: %v", err)
+	}
+	return path
+}
+
+func TestRunServe_MissingSeedFile(t *testing.T) {
+	t.Setenv("FORGE_LOCAL_TRUST_DOMAIN", "local.example.com")
+	t.Setenv("FORGE_REMOTE_TRUST_DOMAIN", "remote.example.com")
+	t.Setenv("FORGE_BUNDLE_ENDPOINT_URL", "https://bundle.example.com")
+	t.Setenv("FORGE_BUNDLE_SEED_FILE", "")
+
+	if err := runServe(); err == nil || !strings.Contains(err.Error(), "FORGE_BUNDLE_SEED_FILE") {
+		t.Fatalf("error = %v, want FORGE_BUNDLE_SEED_FILE required", err)
+	}
+}
+
+func TestRunServe_UnreadableSeedFile(t *testing.T) {
+	t.Setenv("FORGE_LOCAL_TRUST_DOMAIN", "local.example.com")
+	t.Setenv("FORGE_REMOTE_TRUST_DOMAIN", "remote.example.com")
+	t.Setenv("FORGE_BUNDLE_ENDPOINT_URL", "https://bundle.example.com")
+	t.Setenv("FORGE_BUNDLE_SEED_FILE", filepath.Join(t.TempDir(), "missing"))
+
+	if err := runServe(); err == nil || !strings.Contains(err.Error(), "bundle seed") {
+		t.Fatalf("error = %v, want bundle seed error", err)
+	}
+}
+
 func TestRunServe_UnreachableBundleEndpoint(t *testing.T) {
 	t.Setenv("FORGE_LOCAL_TRUST_DOMAIN", "local.example.com")
 	t.Setenv("FORGE_REMOTE_TRUST_DOMAIN", "remote.example.com")
-	t.Setenv("FORGE_BUNDLE_ENDPOINT_URL", "http://127.0.0.1:1")
+	t.Setenv("FORGE_BUNDLE_ENDPOINT_URL", "https://127.0.0.1:1")
+	t.Setenv("FORGE_BUNDLE_SEED_FILE", writeSeedFile(t, "remote.example.com"))
 
 	err := runServe()
 	if err == nil {
@@ -83,7 +151,8 @@ func TestRunServe_DefaultListenAddr(t *testing.T) {
 	t.Setenv("FORGE_LISTEN_ADDR", "")
 	t.Setenv("FORGE_LOCAL_TRUST_DOMAIN", "local.example.com")
 	t.Setenv("FORGE_REMOTE_TRUST_DOMAIN", "remote.example.com")
-	t.Setenv("FORGE_BUNDLE_ENDPOINT_URL", "http://127.0.0.1:1")
+	t.Setenv("FORGE_BUNDLE_ENDPOINT_URL", "https://127.0.0.1:1")
+	t.Setenv("FORGE_BUNDLE_SEED_FILE", writeSeedFile(t, "remote.example.com"))
 
 	// Will fail at bundle fetch, but validates env parsing runs
 	err := runServe()

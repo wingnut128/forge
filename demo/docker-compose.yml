@@ -40,11 +40,11 @@ services:
     command: ["/usr/local/bin/forge", "serve"]
     ports: ["8080:8080"]
     environment:
-      - SSL_CERT_FILE=/etc/spire/certs/ca.crt
       - FORGE_LOCAL_TRUST_DOMAIN=forge.aws.local
       - FORGE_REMOTE_TRUST_DOMAIN=forge.gcp.local
       - FORGE_BUNDLE_ENDPOINT_URL=https://spire-gcp-server:8443
+      - FORGE_BUNDLE_SEED_FILE=/etc/forge/peer.bundle
       - FORGE_LISTEN_ADDR=:8080
     volumes:
       - ./generated/forge:/usr/local/bin/forge:ro
-      - ./certs/ca.crt:/etc/spire/certs/ca.crt:ro
+      - ./generated/gcp.bundle:/etc/forge/peer.bundle:ro

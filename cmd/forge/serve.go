@@ -22,13 +22,14 @@ func runServe() error {
 	localTD := os.Getenv("FORGE_LOCAL_TRUST_DOMAIN")
 	remoteTD := os.Getenv("FORGE_REMOTE_TRUST_DOMAIN")
 	bundleURL := os.Getenv("FORGE_BUNDLE_ENDPOINT_URL")
+	seedFile := os.Getenv("FORGE_BUNDLE_SEED_FILE")
 	listenAddr := os.Getenv("FORGE_LISTEN_ADDR")
 	if listenAddr == "" {
 		listenAddr = ":8080"
 	}
 
-	if localTD == "" || remoteTD == "" || bundleURL == "" {
-		return fmt.Errorf("FORGE_LOCAL_TRUST_DOMAIN, FORGE_REMOTE_TRUST_DOMAIN, and FORGE_BUNDLE_ENDPOINT_URL are required")
+	if localTD == "" || remoteTD == "" || bundleURL == "" || seedFile == "" {
+		return fmt.Errorf("FORGE_LOCAL_TRUST_DOMAIN, FORGE_REMOTE_TRUST_DOMAIN, FORGE_BUNDLE_ENDPOINT_URL, and FORGE_BUNDLE_SEED_FILE are required")
 	}
 
 	pair, err := attestation.NewFederationPair(
@@ -39,7 +40,14 @@ func runServe() error {
 		return fmt.Errorf("federation pair: %w", err)
 	}
 
-	refresher, err := attestation.NewBundleRefresher(remoteTD, bundleURL, 0)
+	// The seed is the peer bundle exchanged at bootstrap. It authenticates the
+	// peer's https_spiffe bundle endpoint on the first fetch.
+	seed, err := attestation.LoadSeedBundle(remoteTD, seedFile)
+	if err != nil {
+		return fmt.Errorf("bundle seed: %w", err)
+	}
+
+	refresher, err := attestation.NewBundleRefresher(seed, bundleURL, 0)
 	if err != nil {
 		return fmt.Errorf("bundle refresher: %w", err)
 	}

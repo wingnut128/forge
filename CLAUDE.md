@@ -54,6 +54,7 @@ FORGE_STACK=dev go run ./cmd/forge destroy
 FORGE_LOCAL_TRUST_DOMAIN=forge.dev.gcp.example.com \
 FORGE_REMOTE_TRUST_DOMAIN=forge.dev.aws.example.com \
 FORGE_BUNDLE_ENDPOINT_URL=https://bundle.example.com \
+FORGE_BUNDLE_SEED_FILE=./peer.bundle \
 FORGE_POLICY_DIR=./policies/examples \
 go run ./cmd/forge serve
 
@@ -119,6 +120,7 @@ Set via `pulumi config set forge:<key> <value>`:
 | `FORGE_LOCAL_TRUST_DOMAIN` | yes | — |
 | `FORGE_REMOTE_TRUST_DOMAIN` | yes | — |
 | `FORGE_BUNDLE_ENDPOINT_URL` | yes | — |
+| `FORGE_BUNDLE_SEED_FILE` | yes | — (peer bundle from `spire-server bundle show -format spiffe`; authenticates the peer's `https_spiffe` endpoint) |
 | `FORGE_LISTEN_ADDR` | no | `:8080` |
 | `FORGE_POLICY_DIR` | no | (authz disabled) |
 
@@ -199,7 +201,7 @@ Access for all of it is IAP on GCP (`gcloud compute ssh --tunnel-through-iap`, p
 
 `forge serve` runs alongside the **AWS** SPIRE server (`pkg/components/aws/forge_serve.go`), built from source on the instance at `ForgeRepoRef` (default `main`). It listens on `:8080`, reachable VPC-internally through the existing internal security group.
 
-**It is expected to crash-loop from first boot until the bootstrap completes.** `pkg/attestation` treats the initial bundle fetch as fatal (`bundle.go:133-136`), so the process exits until the GCP bundle endpoint is reachable *and* the trust bundles have been exchanged. The unit uses `Restart=always` with a 15s backoff, so it comes up on its own once step 2 of the bootstrap lands — no operator action is needed to start it. A crash-looping `forge-serve` before bootstrap is normal, not a fault.
+**It is expected to crash-loop from first boot until the bootstrap completes.** It needs the GCP bundle at `/etc/forge/peer.bundle` (`aws.ForgeServeSeedPath`), placed during the layer-4 bundle exchange, and `pkg/attestation` treats the initial bundle fetch as fatal, so the process exits until the seed exists *and* the GCP bundle endpoint is reachable. The unit uses `Restart=always` with a 15s backoff, so it comes up on its own once layer 4 of the bootstrap lands — no operator action is needed to start it. A crash-looping `forge-serve` before bootstrap is normal, not a fault.
 
 Authorization stays opt-in: no `FORGE_POLICY_DIR` is set, so Cedar evaluation is disabled and `/validate` reports attestation validity only.
 
@@ -211,7 +213,11 @@ Go is installed from the distro package purely to bootstrap; `GOTOOLCHAIN=auto` 
 
 The bundle endpoint uses the **`https_spiffe`** profile by default (`pkg/spire/config.go`). The endpoint authenticates with the SPIRE server's own SVID, validated against the trust bundle the peer already holds — so there is **no serving certificate, no CA, no key distribution, and no SAN to match**. This retires threat-model item F-01 for the default path rather than solving it.
 
-The tradeoff: `https_spiffe` requires the peer bundle to be seeded before the first fetch. The one-time manual bundle exchange during bootstrap (`demo/bootstrap.sh:37-45`) already does exactly that, so it costs nothing extra here. `BundleProfileWeb` remains available and still emits `serving_cert_file` — it is the right choice only if the endpoint is ever exposed over public web PKI, which would then need the cert provisioning F-01 describes.
+The tradeoff: `https_spiffe` requires the peer bundle to be seeded before the first fetch. The one-time manual bundle exchange during bootstrap (`demo/bootstrap.sh`) already does exactly that, so it costs nothing extra here. `BundleProfileWeb` remains available and still emits `serving_cert_file` — it is the right choice only if the endpoint is ever exposed over public web PKI, which would then need the cert provisioning F-01 describes.
+
+**`forge serve` is an `https_spiffe` client too.** `BundleRefresher` (`pkg/attestation/bundle.go`) fetches via go-spiffe's `federation.FetchBundle` with SPIFFE auth: the endpoint must present `spiffe://<peer-td>/spire/server`, verified against the X.509 authorities of the bundle it currently holds. That starts from the seed in `FORGE_BUNDLE_SEED_FILE` and advances with each successful fetch, so CA rotation is followed. A fetched bundle with no X.509 authorities is refused, since accepting it would leave nothing to authenticate the next fetch. A plain web-PKI client cannot talk to this endpoint at all — the SVID has no DNS SAN. The converse also holds: selecting `BundleProfileWeb` would need `forge serve` to fetch with web PKI again, which it no longer does.
+
+`forge serve` installs its own stderr `slog` handler at startup. The Pulumi SDK's `init` replaces the `slog` default with a verbosity-gated handler that drops Info and Warn, — without it the refresher's trust-root and refresh-failure warnings and the per-request audit log are silently discarded.
 
 ### AWS egress: fck-nat, not NAT Gateway
 

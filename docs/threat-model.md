@@ -188,7 +188,7 @@ Severity is relative to a **live** deployment; many are acceptable for the local
 - **GKE / EKS clusters** (`enable-gke`/`enable-eks`) and the Kubernetes workload-attestation
   path are not yet walked — they are opt-in and orthogonal to the VM-based trust proof.
 - **Demo harness** (`demo/`) uses intentionally insecure shortcuts (`insecure_bootstrap`,
-  self-signed certs) and is explicitly non-production.
+  `join_token` attestation) and is explicitly non-production.
 - Threats are taxonomy-complete per element, **not** exhaustive of business-logic or
   multi-step chains. The two dominant chains here are *rogue endpoint → poisoned/disk-stolen
   key → SVIDs valid in both clouds* (0 → I2 → I3) and *request-level authz opt-out* (A).

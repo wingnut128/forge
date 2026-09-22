@@ -58,4 +58,4 @@ demo-clean: ## Tear down demo containers, network, and generated artifacts
 	-container rm -f spire-gcp-server spire-aws-server spire-gcp-agent spire-aws-agent forge-serve 2>/dev/null
 	-container network rm forge-demo 2>/dev/null
 	-docker compose -f demo/docker-compose.yml down 2>/dev/null
-	rm -rf demo/generated demo/certs
+	rm -rf demo/generated

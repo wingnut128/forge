@@ -13,7 +13,6 @@ RT="${DEMO_RUNTIME:-container}"   # container | docker
 NET=forge-demo
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GEN="$ROOT/demo/generated"
-CERTS="$ROOT/demo/certs"
 SPIRE_SERVER_IMG=ghcr.io/spiffe/spire-server:1.11.2
 SPIRE_AGENT_IMG=ghcr.io/spiffe/spire-agent:1.11.2
 
@@ -21,9 +20,8 @@ cd "$ROOT"
 
 command -v jq >/dev/null || { echo "FAIL: jq is required (brew install jq)"; exit 1; }
 
-echo "==> rendering configs + certs"
+echo "==> rendering configs"
 go run ./demo/gen "$GEN"
-./demo/gen-certs.sh "$CERTS"
 
 echo "==> building forge linux binary"
 CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" \
@@ -51,19 +49,15 @@ echo "==> network $NET ready ($RT runtime)"
 
 # The SPIRE images' ENTRYPOINT is ["/opt/spire/bin/spire-<role>", "run"], so the
 # command we append must NOT repeat "run" — just the flags.
-run_srv() { # name conf cert key
+run_srv() { # name conf
   $RUN -d --name "$1" --network "$NET" \
     -v "$GEN/$2:/etc/spire/server.conf:ro" \
-    -v "$CERTS/$3:/etc/spire/certs/server.crt:ro" \
-    -v "$CERTS/$4:/etc/spire/certs/server.key:ro" \
-    -v "$CERTS/ca.crt:/etc/spire/certs/ca.crt:ro" \
-    -e SSL_CERT_FILE=/etc/spire/certs/ca.crt \
     "$SPIRE_SERVER_IMG" -config /etc/spire/server.conf
 }
 
 echo "==> starting SPIRE servers"
-run_srv spire-gcp-server server-gcp.conf spire-gcp-server.crt spire-gcp-server.key
-run_srv spire-aws-server server-aws.conf spire-aws-server.crt spire-aws-server.key
+run_srv spire-gcp-server server-gcp.conf
+run_srv spire-aws-server server-aws.conf
 
 # Apple `container` has no built-in name DNS, so resolve the servers' assigned
 # IPs and hand the agent + forge-serve a generated /etc/hosts. Docker provides
@@ -90,9 +84,7 @@ fi
 # Run-commands bootstrap.sh fires later (word-split on use, like $EXEC). Paths
 # here contain no spaces. bootstrap appends the trailing spire-<role> flags.
 export RUN_AGENT="$RUN -d --name spire-gcp-agent --network $NET $HOSTS_MOUNT \
-  -v $GEN/agent-gcp.conf:/etc/spire/agent.conf:ro \
-  -v $CERTS/ca.crt:/etc/spire/certs/ca.crt:ro \
-  -e SSL_CERT_FILE=/etc/spire/certs/ca.crt $SPIRE_AGENT_IMG"
+  -v $GEN/agent-gcp.conf:/etc/spire/agent.conf:ro $SPIRE_AGENT_IMG"
 
 # forge-serve authenticates the GCP bundle endpoint (https_spiffe) against the
 # GCP bundle bootstrap.sh exchanges into $BUNDLE_DIR — no web-PKI CA involved.

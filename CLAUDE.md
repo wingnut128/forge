@@ -144,7 +144,7 @@ pkg/orchestration/      → server.go: HTTP server for /validate and /healthz en
 pkg/authz/              → authz.go: Cedar-based ABAC authorization
 pkg/policies/           → policy.go, gcp.go, aws.go: infrastructure policy checks
 pkg/spire/              → config.go: renders federation-aware SPIRE server/agent HCL plus both VM startup scripts (shared by VM scripts + demo)
-demo/                   → local cross-cloud federation proof (gen, certs, bootstrap, run.sh, compose)
+demo/                   → local cross-cloud federation proof (gen, bootstrap, run.sh, compose)
 policies/examples/      → Example Cedar policies for cross-cloud access control
 ```
 

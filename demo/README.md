@@ -119,7 +119,7 @@ Forge code — the demo exercises the real validation path.
 A successful run ends like this (image-pull/progress lines elided):
 
 ```
-==> rendering configs + certs
+==> rendering configs
 ==> building forge linux binary
 ==> network forge-demo ready (container runtime)
 ==> starting SPIRE servers
@@ -158,14 +158,13 @@ The final line is the proof: **`PASS: cross-cloud SVID validated`**. The
 | File | Role |
 |------|------|
 | `gen/main.go` | Renders the four SPIRE configs from `pkg/spire` into `generated/` |
-| `gen-certs.sh` | Stamps a throwaway demo CA + `https_web` serving certs |
 | `run.sh` | Starts the servers, resolves IPs, builds run-commands, invokes bootstrap |
 | `bootstrap.sh` | Federation bundle exchange → join token → entry → mint → validate |
 | `validate.sh` | POSTs the token to `forge serve /validate` and asserts the result |
 | `docker-compose.yml` | Docker fallback service definitions |
 | `integration_test.go` | `//go:build demo` smoke test that runs the whole thing |
 
-`generated/` and `certs/` are runtime output (git-ignored).
+`generated/` is runtime output (git-ignored).
 
 ## How the demo differs from a live deployment (Phase 2)
 

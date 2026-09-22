@@ -344,6 +344,7 @@ func TestRenderForgeServeScript(t *testing.T) {
 		"FORGE_LOCAL_TRUST_DOMAIN=forge.dev.aws",
 		"FORGE_REMOTE_TRUST_DOMAIN=forge.dev.gcp",
 		"FORGE_BUNDLE_ENDPOINT_URL=https://10.0.16.10:8443",
+		"FORGE_BUNDLE_SEED_FILE=" + ForgeServeSeedPath,
 		"ExecStart=/usr/local/bin/forge serve",
 		"--branch main",
 		// The initial bundle fetch is fatal, so it must retry until bootstrap.

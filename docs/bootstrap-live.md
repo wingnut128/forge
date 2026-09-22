@@ -180,6 +180,8 @@ both sides deadlock.
 sudo spire-server bundle show -format spiffe > /tmp/gcp.bundle   # on GCP
 # copy /tmp/gcp.bundle to the AWS server, then:
 sudo spire-server bundle set -format spiffe -id spiffe://forge.dev.gcp < /tmp/gcp.bundle
+# forge-serve needs the same bundle as its seed, on the AWS server:
+sudo install -D -m 0644 /tmp/gcp.bundle /etc/forge/peer.bundle
 
 # AWS bundle -> GCP server
 sudo spire-server bundle show -format spiffe > /tmp/aws.bundle   # on AWS
@@ -201,8 +203,12 @@ sudo systemctl status forge-serve
 curl -sS localhost:8080/healthz
 ```
 
-Its crash-looping **before** this step is expected, not a fault — the initial
-bundle fetch is fatal by design.
+Its crash-looping **before** this step is expected, not a fault — it needs the
+seed bundle at `/etc/forge/peer.bundle`, and the initial bundle fetch is fatal
+by design. If it keeps crash-looping **after** this step, check
+`journalctl -u forge-serve`: `bundle seed` means the file is missing or not a
+SPIFFE bundle; an x509 error means the seed does not match the GCP server's
+current CA (re-copy a fresh `bundle show`).
 
 ---
 

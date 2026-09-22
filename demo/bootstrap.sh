@@ -7,11 +7,14 @@
 #   RUN_AGENT  - run-command that launches the GCP agent (image included);
 #                bootstrap appends the spire-agent flags
 #   RUN_FORGE  - run-command that launches forge-serve (fully formed)
+#   BUNDLE_DIR - where the exchanged bundles are written; RUN_FORGE mounts
+#                $BUNDLE_DIR/gcp.bundle as forge-serve's seed bundle
 set -euo pipefail
 
 EXEC="${EXEC:?set EXEC to the container exec command}"
 RUN_AGENT="${RUN_AGENT:?set RUN_AGENT to the agent run command}"
 RUN_FORGE="${RUN_FORGE:?set RUN_FORGE to the forge-serve run command}"
+BUNDLE_DIR="${BUNDLE_DIR:?set BUNDLE_DIR to the bundle output directory}"
 
 GCP_SRV=spire-gcp-server
 AWS_SRV=spire-aws-server
@@ -36,13 +39,13 @@ done
 
 echo "==> exchanging trust bundles (federation)"
 # GCP bundle -> AWS server (which federates_with GCP)
-srv "$GCP_SRV" bundle show -format spiffe > /tmp/gcp.bundle
+srv "$GCP_SRV" bundle show -format spiffe > "$BUNDLE_DIR/gcp.bundle"
 $EXEC -i "$AWS_SRV" /opt/spire/bin/spire-server bundle set \
-  -format spiffe -id "spiffe://${GCP_TD}" < /tmp/gcp.bundle
+  -format spiffe -id "spiffe://${GCP_TD}" < "$BUNDLE_DIR/gcp.bundle"
 # AWS bundle -> GCP server (which federates_with AWS)
-srv "$AWS_SRV" bundle show -format spiffe > /tmp/aws.bundle
+srv "$AWS_SRV" bundle show -format spiffe > "$BUNDLE_DIR/aws.bundle"
 $EXEC -i "$GCP_SRV" /opt/spire/bin/spire-server bundle set \
-  -format spiffe -id "spiffe://${AWS_TD}" < /tmp/aws.bundle
+  -format spiffe -id "spiffe://${AWS_TD}" < "$BUNDLE_DIR/aws.bundle"
 
 echo "==> starting forge serve (AWS role) — GCP bundle endpoint is up now"
 $RUN_FORGE

@@ -13,8 +13,8 @@ resp="$(curl -sS -X POST "$URL/validate" \
 
 echo "validate response: $resp"
 
-echo "$resp" | grep -q '"valid":true' || { echo "FAIL: token not valid"; exit 1; }
-echo "$resp" | grep -q "\"trust_domain\":\"${EXPECT_TD}\"" || {
+echo "$resp" | jq -e '.valid == true' >/dev/null || { echo "FAIL: token not valid"; exit 1; }
+echo "$resp" | jq -e --arg td "$EXPECT_TD" '.trust_domain == $td' >/dev/null || {
   echo "FAIL: trust domain mismatch (want ${EXPECT_TD})"; exit 1; }
 
 echo "PASS: cross-cloud SVID validated (remote td=${EXPECT_TD})"

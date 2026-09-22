@@ -19,6 +19,8 @@ SPIRE_AGENT_IMG=ghcr.io/spiffe/spire-agent:1.11.2
 
 cd "$ROOT"
 
+command -v jq >/dev/null || { echo "FAIL: jq is required (brew install jq)"; exit 1; }
+
 echo "==> rendering configs + certs"
 go run ./demo/gen "$GEN"
 ./demo/gen-certs.sh "$CERTS"
@@ -68,9 +70,9 @@ run_srv spire-aws-server server-aws.conf spire-aws-server.crt spire-aws-server.k
 # name DNS on a user-defined network, so the hosts mount is container-only.
 HOSTS_MOUNT=""
 if [ "$RT" = "container" ]; then
-  # inspect emits "ipv4Address" : "192.168.65.2\/24" — capture the dotted quad,
-  # stopping before the escaped slash.
-  ip_of() { container inspect "$1" 2>/dev/null | sed -n 's/.*"ipv4Address"[^0-9]*\([0-9][0-9.]*\).*/\1/p' | head -1; }
+  # ipv4Address carries the prefix length ("192.168.65.2/24"); strip it. Empty
+  # until the container has an address, so the retry loop below keeps polling.
+  ip_of() { container inspect "$1" 2>/dev/null | jq -r '.[0].status.networks[0].ipv4Address // empty | split("/")[0]' 2>/dev/null || true; }
   gcp_ip() { ip_of spire-gcp-server; }
   aws_ip() { ip_of spire-aws-server; }
   echo "==> resolving server IPs"

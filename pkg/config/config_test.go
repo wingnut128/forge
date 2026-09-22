@@ -133,9 +133,17 @@ func TestNewForgeConfig_BowtieFields(t *testing.T) {
 
 func TestNewForgeConfig_InvalidBowtieCIDR(t *testing.T) {
 	in := baseInput()
-	in.BowtieAdminCIDRs = []string{"not-a-cidr"}
-	if _, err := NewForgeConfig(in); err == nil {
-		t.Fatal("expected error for invalid CIDR")
+	for _, c := range []string{
+		"not-a-cidr",
+		"999.1.1.1/8",   // octet out of range
+		"10.0.0.0/99",   // prefix out of range
+		"10.0.0.0",      // no prefix
+		"2001:db8::/32", // IPv6
+	} {
+		in.BowtieAdminCIDRs = []string{c}
+		if _, err := NewForgeConfig(in); err == nil {
+			t.Errorf("expected error for invalid CIDR %q", c)
+		}
 	}
 }
 

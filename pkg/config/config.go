@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -28,11 +29,15 @@ var validEnvironment = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$`)
 // validTrustDomain matches DNS-like names per the SPIFFE spec (lowercase labels separated by dots).
 var validTrustDomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)*$`)
 
-// validCIDR matches IPv4 CIDR blocks.
-var validCIDR = regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$`)
-
 // validWGKey matches the base64 encoding of a 32-byte Curve25519 key.
 var validWGKey = regexp.MustCompile(`^[A-Za-z0-9+/]{43}=$`)
+
+// isIPv4CIDR reports whether s is a well-formed IPv4 CIDR block. It parses
+// rather than pattern-matches so out-of-range octets and prefixes are rejected.
+func isIPv4CIDR(s string) bool {
+	ip, _, err := net.ParseCIDR(s)
+	return err == nil && ip.To4() != nil
+}
 
 // ForgeConfig holds all stack configuration values.
 type ForgeConfig struct {
@@ -159,7 +164,7 @@ func NewForgeConfig(in ConfigInput) (*ForgeConfig, error) {
 		return nil, err
 	}
 	for _, c := range in.BowtieAdminCIDRs {
-		if !validCIDR.MatchString(c) {
+		if !isIPv4CIDR(c) {
 			return nil, fmt.Errorf("bowtie-admin-cidrs entry %q is not a valid IPv4 CIDR", c)
 		}
 	}

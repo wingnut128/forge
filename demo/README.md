@@ -61,6 +61,7 @@ shows what that wiring *accomplishes*.)
 ## Prerequisites
 
 - **Go 1.25+**
+- **`jq`** — the scripts read SPIRE, runtime, and forge output as JSON
 - A container runtime — either:
   - **Apple `container`** (default, macOS) — `container system status` should report `running`, or
   - **Docker** — run with `DEMO_RUNTIME=docker make demo`

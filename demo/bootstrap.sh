@@ -52,8 +52,8 @@ for _ in $(seq 1 15); do
 done
 
 echo "==> generating agent join token"
-JOIN_TOKEN="$(srv "$GCP_SRV" token generate -spiffeID "${AGENT_ID}" \
-  | sed -n 's/^Token: *//p' | tr -d '[:space:]')"
+JOIN_TOKEN="$(srv "$GCP_SRV" token generate -spiffeID "${AGENT_ID}" -output json \
+  | jq -r '.value // empty')"
 [ -n "$JOIN_TOKEN" ] || { echo "FAIL: empty join token"; exit 1; }
 echo "  token: ${JOIN_TOKEN}"
 
@@ -75,15 +75,15 @@ srv "$GCP_SRV" entry create \
 
 echo "==> minting JWT-SVID on GCP (audience = AWS trust domain)"
 # Poll: the agent needs a sync cycle to receive the new entry before it can
-# issue the SVID ("no identity issued" until then). The JWT-SVID starts "eyJ".
+# issue the SVID ("no identity issued" until then).
 TOKEN=""
 for _ in $(seq 1 20); do
-  # `|| true` on both stages: until the entry syncs the fetch errors and grep
-  # finds nothing — without it, set -e/pipefail would abort instead of retry.
+  # `|| true` on both stages: until the entry syncs the fetch errors with no
+  # JSON on stdout — without it, set -e/pipefail would abort instead of retry.
   out="$($EXEC "$GCP_AGENT" /opt/spire/bin/spire-agent api fetch jwt \
-    -audience "${AWS_TD}" -spiffeID "${WORKLOAD_ID}" \
+    -audience "${AWS_TD}" -spiffeID "${WORKLOAD_ID}" -output json \
     -socketPath /tmp/agent.sock 2>/dev/null || true)"
-  TOKEN="$(printf '%s' "$out" | grep -oE 'eyJ[A-Za-z0-9._-]+' | head -1 || true)"
+  TOKEN="$(printf '%s' "$out" | jq -r '.[0].svids[0].svid // empty' 2>/dev/null || true)"
   [ -n "$TOKEN" ] && break
   sleep 2
 done

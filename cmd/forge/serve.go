@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,6 +14,11 @@ import (
 )
 
 func runServe() error {
+	// The Pulumi SDK's init installs a verbosity-gated slog default that drops
+	// Info and Warn, which would silence the bundle refresher's trust-root and
+	// refresh-failure warnings. serve never runs Pulumi, so log plainly.
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
 	localTD := os.Getenv("FORGE_LOCAL_TRUST_DOMAIN")
 	remoteTD := os.Getenv("FORGE_REMOTE_TRUST_DOMAIN")
 	bundleURL := os.Getenv("FORGE_BUNDLE_ENDPOINT_URL")

@@ -11,6 +11,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## CI and Dependency Automation
 
+> **Note:** this repo is being archived and its work moved to swamp. The workflows below are disabled and `.github/dependabot.yml` is removed.
+
 Workflows in `.github/workflows/`:
 
 | Workflow | Trigger | Purpose |
@@ -29,7 +31,7 @@ It uses `GITHUB_TOKEN` only — there is no PAT and no credential to rotate. Do 
 
 ### Action version pinning
 
-Actions are pinned to **floating major tags** (`@v4`, `@v7`) so patches and minors are picked up automatically. `github/codeql-action` is excluded from patch/minor Dependabot updates in `.github/dependabot.yml` — left alone, Dependabot proposes narrowing `@v4` to a fixed patch pin, which lands stale and generates a PR per patch. Major bumps still open PRs for every action.
+Actions are pinned to **floating major tags** (`@v4`, `@v7`) so patches and minors are picked up automatically. `.github/dependabot.yml` has been removed, so nothing bumps them automatically any more.
 
 ## What This Is
 
